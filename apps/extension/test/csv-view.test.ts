@@ -167,6 +167,7 @@ describe("rowsToCsv", () => {
     const failed = row({
       rowIndex: 3,
       status: "ERROR",
+      raw: { companyName: '=HYPERLINK("https://evil.example","click")' },
       error: { code: "provider_unavailable", message: "Provider down", retryable: true, at: FIXTURE_TIME },
     });
     const notFound = row({ rowIndex: 4, status: "NOT_FOUND", evaluation: evaluationFor("Initech") });
@@ -188,6 +189,7 @@ describe("rowsToCsv", () => {
     expect(lines).toHaveLength(6);
     expect(lines[0]).toContain("candidate_urls");
     expect(csv).toContain('"Acme, Inc."');
+    expect(csv).toContain(`"'=HYPERLINK(""https://evil.example"",""click"")"`);
     expect(csv).toContain("provider_unavailable: Provider down");
     expect(csv).toContain("Test Operator at");
     expect(csv).toContain("https://www.linkedin.com/company/acme-inc/");

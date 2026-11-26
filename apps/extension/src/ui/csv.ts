@@ -314,7 +314,9 @@ export function parsePaste(text: string): ImportResult {
 }
 
 function csvCell(value: unknown): string {
-  const text = value === null || value === undefined ? "" : String(value);
+  let text = value === null || value === undefined ? "" : String(value);
+  // Prevent spreadsheet formula injection (CSV is commonly opened in Excel).
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
   if (/[",\r\n]/.test(text) || /^\s|\s$/.test(text)) {
     return `"${text.replace(/"/g, '""')}"`;
   }
