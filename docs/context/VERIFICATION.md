@@ -73,9 +73,12 @@ These are **QA artifacts**, not store-ready packages. `npm run package` refuses 
 
 ## Sync status
 
-- Local Git history: initial build `00636c5d61dc1ec00be8c9585a85f05e891b8b59`, verification docs `8c70a5d018870df44022082681ef5b1a0b228967`, domain fix `117506fa4db4658b23a8f653148d683238f5e12d`, CSV hardening `99ccbb89c1e0b1e1cd8abe141f6e690fce0070de`, docs clarifications `6f5b54e`, `703e803`, people/AI feature `6a7b1be3d00eea4e53ca869e6063905ea3010306`, manifest copy `e979651fb21b0bb9b5813b4611e33615905b17fa`, plus this verification commit.
-- GitHub remote: **none**. `gh auth status` reported “You are not logged into any GitHub hosts.” No push, release, or remote SHA was created or claimed.
-- Chrome Web Store / Edge Add-ons: **not submitted** (no developer-account access or owner authorization).
+- **Public repository:** <https://github.com/siddhant-pardeshi/company-linkedin-url-finder> (MIT, default branch `main`, description and six topics set).
+- **Authenticated as:** `siddhant-pardeshi` via `gh auth login` (device flow, scopes `gist`, `read:org`, `repo`).
+- **Published history:** 14 commits, ending at the commit that contains this line. The pre-publish history is retained locally at `refs/heads/backup/original-main` (`dea3b09…`).
+- **Why SHAs changed:** the publishing token lacked the `workflow` OAuth scope, and GitHub refuses any push that creates files under `.github/workflows/`. The eight local commits were replayed without that one file (identical trees otherwise, messages/authors/dates preserved), and the CI definition was relocated to `docs/ci/ci.yml.disabled` with activation instructions in `docs/ci/README.md`. Nothing was discarded: the original commits remain reachable via the backup branch.
+- **CI:** inactive until someone with the `workflow` scope moves `docs/ci/ci.yml.disabled` to `.github/workflows/ci.yml`. `npm run check` runs the same gates locally.
+- **Chrome Web Store / Edge Add-ons:** **not submitted** (no developer-account access or owner authorization).
 
 ## Local context folder
 
@@ -85,6 +88,6 @@ These are **QA artifacts**, not store-ready packages. `npm run package` refuses 
 
 1. Deploy the resolver with a real HTTPS origin, Brave key, and access token.
 2. Rebuild with `RESOLVER_ORIGIN`, then run `npm run package` and record the real hashes.
-3. Authenticate GitHub, create/push `company-linkedin-url-finder`, and verify the remote commit SHA.
+3. Activate CI: `gh auth refresh -h github.com -s workflow`, then move `docs/ci/ci.yml.disabled` to `.github/workflows/ci.yml` and push.
 4. Publish a privacy-policy/support URL, finalize listing assets, provision a reviewer token, and authorize store submission.
 5. Optionally test a real AI key on each provider you plan to advertise; model IDs and quotas change.
