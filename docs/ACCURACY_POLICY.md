@@ -68,7 +68,7 @@ Every query includes the restriction `site:linkedin.com/company/`. The exact com
 | `country`  | `site:linkedin.com/company/ "Acme Corp" "India"`    | Country supplied                         |
 | `reshaped` | `"Acme Corp" site:linkedin.com/company/`            | Short/generic name, or no domain/country |
 
-Limits: four queries per lookup, 120-character sanitized phrase, 400-character query, no duplicate query strings, quotes/backslashes/control characters removed. The resolver rejects any candidate whose query does not contain the company-site restriction.
+Limits: four queries per lookup, 120-character sanitized phrase, 400-character query, no duplicate query strings, quotes/backslashes/control characters removed. A result is excluded by the evaluation step when its query does not contain the company-site restriction. The resolver only plans company-restricted queries.
 
 ## 5. Candidate evaluation
 
