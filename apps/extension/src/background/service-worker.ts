@@ -4,6 +4,9 @@ import { clearSettings, loadSettings, saveSettings } from "../settings.js";
 import { JobEngine } from "../job/engine.js";
 import { IdbRepository } from "../storage/idb.js";
 import { ResolverClient } from "../api/client.js";
+import { AiClient } from "../ai/client.js";
+import { hasAiPermission, aiProviderOrigin } from "../ai/permissions.js";
+import { loadAiSettings, saveAiSettings, clearAiSettings, hasUsableAiKey } from "../ai/settings.js";
 
 const TICK_ALARM = "cpf-job-tick";
 const COOLDOWN_ALARM = "cpf-cooldown";
@@ -21,6 +24,16 @@ function getEngine(): Promise<JobEngine> {
         repository,
         client,
         getSettings: loadSettings,
+        assistPersonQueries: async (items) => {
+          const ai = await loadAiSettings();
+          if (!ai.enabled || !hasUsableAiKey(ai)) return {};
+          if (!(await hasAiPermission(ai.provider))) {
+            throw new Error(
+              `AI host permission is not granted for ${aiProviderOrigin(ai.provider)}. Open Settings and enable AI assist.`,
+            );
+          }
+          return new AiClient({ settings: ai }).generateQueries(items);
+        },
         logger: (event, fields) => {
           if (BUILD_ENV === "development") console.debug(`[cpf] ${event}`, fields ?? {});
         },
@@ -162,9 +175,33 @@ async function handleMessage(message: unknown): Promise<unknown> {
       const client = new ResolverClient({ getToken: async () => (await loadSettings()).accessToken });
       return client.whoami();
     }
+    case "ai:get":
+      return loadAiSettings();
+    case "ai:save": {
+      const next = await saveAiSettings(request.patch);
+      if (next.enabled && !(await hasAiPermission(next.provider))) {
+        throw new JobError(
+          "ai_permission_missing",
+          "The AI provider host permission is not granted. Use Enable AI assist in Settings.",
+        );
+      }
+      return next;
+    }
+    case "ai:test": {
+      const ai = await loadAiSettings();
+      if (!hasUsableAiKey(ai)) throw new JobError("ai_missing_key", "Save an AI API key first.");
+      if (!(await hasAiPermission(ai.provider))) {
+        throw new JobError(
+          "ai_permission_missing",
+          "Enable the AI provider host permission in Settings first.",
+        );
+      }
+      return new AiClient({ settings: ai }).testConnection();
+    }
     case "data:clear-all": {
       await engine.clearAll();
       await clearSettings();
+      await clearAiSettings();
       await clearAlarms();
       return { cleared: true };
     }

@@ -55,8 +55,66 @@ describe("parseSearchRequest", () => {
       ...validRequest,
       lookups: [{ ...validRequest.lookups[0], country: "  United States  " }],
     });
-    expect(parsed.lookups[0]?.companyName).toBe("Microsoft");
-    expect(parsed.lookups[0]?.country).toBe("United States");
+    expect(parsed.lookups[0]?.kind).toBe("company");
+    const lookup = parsed.lookups[0] as { companyName?: string; country?: string };
+    expect(lookup.companyName).toBe("Microsoft");
+    expect(lookup.country).toBe("United States");
+  });
+
+  it("accepts a person lookup with safe AI queries", () => {
+    const parsed = parseSearchRequest({
+      ...validRequest,
+      lookups: [
+        {
+          id: "p1",
+          kind: "person",
+          fullName: "Ada Lovelace",
+          company: "Analytical Engines",
+          jobTitle: "Mathematician",
+          location: "London",
+          email: "ada@example.test",
+          extraQueries: ['site:linkedin.com/in/ "Ada Lovelace" "Countess of Lovelace"'],
+        },
+      ],
+    });
+    const lookup = parsed.lookups[0];
+    expect(lookup?.kind).toBe("person");
+    if (lookup?.kind === "person") {
+      expect(lookup.fullName).toBe("Ada Lovelace");
+      expect(lookup.extraQueries).toHaveLength(1);
+      expect(lookup.email).toBe("ada@example.test");
+    }
+  });
+
+  it("rejects unsafe or off-name AI queries", () => {
+    for (const extraQueries of [
+      ['site:linkedin.com/in/ada-lovelace "Ada Lovelace"'],
+      ["https://www.linkedin.com/in/ada-lovelace/"],
+      ['site:linkedin.com/in/ "Someone Else"'],
+      [
+        'site:linkedin.com/in/ "Ada Lovelace"',
+        'site:linkedin.com/in/ "Ada Lovelace"',
+        'site:linkedin.com/in/ "Ada Lovelace"',
+      ],
+    ]) {
+      expect(() =>
+        parseSearchRequest({
+          ...validRequest,
+          lookups: [{ id: "p1", kind: "person", fullName: "Ada Lovelace", extraQueries }],
+        }),
+      ).toThrow(ApiSchemaError);
+    }
+  });
+
+  it("rejects invalid person fields", () => {
+    for (const lookup of [
+      { id: "p1", kind: "person", fullName: "" },
+      { id: "p1", kind: "person", fullName: "Ada Lovelace", email: "not-an-email" },
+      { id: "p1", kind: "person", fullName: "Ada Lovelace", company: "a".repeat(201) },
+      { id: "p1", kind: "unknown", companyName: "Acme" },
+    ]) {
+      expect(() => parseSearchRequest({ ...validRequest, lookups: [lookup] })).toThrow(ApiSchemaError);
+    }
   });
 
   it("rejects an unsupported schema version", () => {

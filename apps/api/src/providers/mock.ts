@@ -1,4 +1,4 @@
-import { fixtureResultsFor } from "@clf/fixtures";
+import { fixtureResultsFor, personFixtureResultsFor } from "@clf/fixtures";
 import type { RawSearchResult } from "@clf/matching";
 import type { SearchContext, SearchProvider } from "./types.js";
 
@@ -13,9 +13,10 @@ export class MockSearchProvider implements SearchProvider {
   public async search(query: string, context: SearchContext): Promise<RawSearchResult[]> {
     const phrase = /"([^"]+)"/.exec(query)?.[1]?.trim() ?? "";
     if (!phrase) return [];
-    return fixtureResultsFor(phrase, query, context.shape, context.retrievedAt).map((result) => ({
-      ...result,
-      provider: this.name,
-    }));
+    const isPersonQuery = /site:linkedin\.com\/in\//i.test(query);
+    const results = isPersonQuery
+      ? personFixtureResultsFor(phrase, query, context.shape, context.retrievedAt)
+      : fixtureResultsFor(phrase, query, context.shape, context.retrievedAt);
+    return results.map((result) => ({ ...result, provider: this.name }));
   }
 }

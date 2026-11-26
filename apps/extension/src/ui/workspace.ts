@@ -22,6 +22,9 @@ import {
   exportFilename,
   parseCsvToRows,
   parsePaste,
+  parsePeopleCsvToRows,
+  parsePeoplePaste,
+  PEOPLE_SAMPLE_CSV,
   rowsToCsv,
   rowsToJson,
   SAMPLE_CSV,
@@ -30,6 +33,8 @@ import {
 import { formatClock, formatDateTime, pluralize, truncate } from "./format.js";
 import { errorMessage, sendMessage } from "./messages.js";
 import { toast } from "./toast.js";
+import { rowContextLines, rowDisplayName, rowKind, rowSubtitle } from "../job/rows.js";
+import type { RowKind } from "../types.js";
 import {
   filterRows,
   paginate,
@@ -53,6 +58,7 @@ type State = {
   lastSnapshotKey: string;
   importResult: ImportResult | null;
   activeTab: Tab;
+  mode: RowKind;
   filter: StatusFilter;
   query: string;
   sortKey: SortKey;
@@ -75,6 +81,7 @@ const state: State = {
   lastSnapshotKey: "",
   importResult: null,
   activeTab: "paste",
+  mode: "company",
   filter: "ALL",
   query: "",
   sortKey: "rowIndex",
@@ -114,6 +121,11 @@ const ui = {
   csvDrop: byId<HTMLDivElement>("csv-drop"),
   csvInput: byId<HTMLInputElement>("csv-input"),
   csvFileName: byId<HTMLSpanElement>("csv-file-name"),
+  csvUploadTitle: byId<HTMLElement>("csv-upload-title"),
+  csvHint: byId<HTMLElement>("csv-hint"),
+  pasteLabel: byId<HTMLElement>("paste-label"),
+  companyColumnLabel: byId<HTMLButtonElement>("company-column-label"),
+  modeButtons: [...document.querySelectorAll<HTMLButtonElement>("button[data-mode]")],
   loadExample: byId<HTMLButtonElement>("load-example"),
   downloadSample: byId<HTMLButtonElement>("download-sample"),
   summary: byId<HTMLDivElement>("import-summary"),
@@ -125,6 +137,7 @@ const ui = {
   jobSection: byId<HTMLElement>("job-section"),
   jobMeta: byId<HTMLParagraphElement>("job-meta"),
   jobBanner: byId<HTMLDivElement>("job-banner"),
+  aiBanner: byId<HTMLDivElement>("ai-banner"),
   pause: byId<HTMLButtonElement>("pause-button"),
   resume: byId<HTMLButtonElement>("resume-button"),
   cancel: byId<HTMLButtonElement>("cancel-button"),
@@ -165,6 +178,13 @@ const ui = {
   editWebsite: byId<HTMLInputElement>("edit-website"),
   editAlias: byId<HTMLInputElement>("edit-alias"),
   editNotes: byId<HTMLTextAreaElement>("edit-notes"),
+  editCompanyFields: byId<HTMLDivElement>("edit-company-fields"),
+  editPersonFields: byId<HTMLDivElement>("edit-person-fields"),
+  editPersonCompany: byId<HTMLInputElement>("edit-person-company"),
+  editJobTitle: byId<HTMLInputElement>("edit-job-title"),
+  editPersonLocation: byId<HTMLInputElement>("edit-person-location"),
+  editEmail: byId<HTMLInputElement>("edit-email"),
+  editPhone: byId<HTMLInputElement>("edit-phone"),
   editClose: byId<HTMLButtonElement>("edit-close"),
   editCancel: byId<HTMLButtonElement>("edit-cancel"),
 };
@@ -275,8 +295,27 @@ function renderBuildBadge(): void {
   ui.buildBadge.title = `Build ${state.info.buildCommit || "unknown"} · ${formatDateTime(state.info.buildTime)}`;
 }
 
+function renderMode(): void {
+  const person = state.mode === "person";
+  for (const button of ui.modeButtons) {
+    const active = button.dataset.mode === state.mode;
+    button.classList.toggle("is-active", active);
+    button.setAttribute("aria-pressed", String(active));
+  }
+  ui.pasteLabel.textContent = person ? "Full names, one per line" : "Company names, one per line";
+  ui.paste.placeholder = person
+    ? "Ada Lovelace\nGrace Hopper\nAlan Turing"
+    : "Microsoft\nExample Private Ltd\nAcme";
+  ui.csvUploadTitle.textContent = person ? "Drop a people CSV here" : "Drop a company CSV here";
+  ui.csvHint.textContent = person
+    ? "UTF-8. Required: full_name. Optional: company, job_title, location, email, phone, notes. Email and phone stay local and are never sent to the search provider."
+    : "UTF-8. Required: company_name. Optional: country, region, city, official_domain, official_website, alias, notes.";
+  ui.companyColumnLabel.textContent = person ? "Person" : "Company";
+}
+
 function renderIntake(): void {
   if (!state.settings) return;
+  renderMode();
   if (document.activeElement !== ui.batchSize) ui.batchSize.value = String(state.settings.batchSize);
   if (document.activeElement !== ui.statusFilter) ui.statusFilter.value = state.filter;
   if (document.activeElement !== ui.pageSize) ui.pageSize.value = String(state.pageSize);
@@ -300,6 +339,15 @@ function renderIntake(): void {
     if (result.errors.length > 0) {
       addChip(pluralize(result.errors.length, "issue"), "chip chip--danger");
     }
+    if (
+      state.mode === "person" &&
+      result.rows.length > 0 &&
+      !result.rows.some((row) =>
+        row.kind === "person" ? Boolean(row.company || row.jobTitle || row.location) : false,
+      )
+    ) {
+      addChip("Add company, title, or location for auto-match", "chip chip--warn");
+    }
     if (jobActive()) addChip("Batch active", "chip chip--warn");
 
     ui.errors.hidden = result.errors.length === 0;
@@ -317,7 +365,7 @@ function renderIntake(): void {
   let disabledReason = "";
   if (!tokenReady) disabledReason = "Add a resolver access token in Settings first.";
   else if (jobActive()) disabledReason = "A batch is already active. Pause or cancel it first.";
-  else if (!result || result.rows.length === 0) disabledReason = "Add at least one valid company name.";
+  else if (!result || result.rows.length === 0) disabledReason = "Add at least one valid row.";
   else if (result.errors.length > 0) disabledReason = "Fix the import issues before starting.";
   else if (state.busy) disabledReason = "Starting the batch…";
 
@@ -351,11 +399,22 @@ function renderJob(): void {
   ui.resultsSection.hidden = false;
   ui.jobMeta.textContent = [
     `#${job.id.slice(0, 8)}`,
+    job.mode === "person" ? "People" : "Companies",
     job.operatorName,
     pluralize(job.totalRows, "row"),
     `${pluralize(job.totalLookups, "lookup")} after de-duplication`,
     `${job.batchSize} per request`,
   ].join(" · ");
+
+  if (job.aiNote) {
+    showBanner(ui.aiBanner, {
+      kind: "warn",
+      title: "AI assist unavailable for this batch",
+      message: `${job.aiNote} The deterministic LinkedIn profile search continued.`,
+    });
+  } else {
+    hideBanner(ui.aiBanner);
+  }
 
   ui.jobState.textContent = JOB_STATE_LABELS[job.state];
   ui.jobState.className = `chip ${
@@ -485,6 +544,10 @@ function renderResults(): void {
   const sorted = sortRows(filtered, state.sortKey, state.sortDir);
   const page = paginate(sorted, state.page, state.pageSize);
   state.page = page.page;
+  const jobMode = snapshot.job.mode ?? (rows[0] ? rowKind(rows[0].raw) : "company");
+  ui.companyColumnLabel.textContent = jobMode === "person" ? "Person" : "Company";
+  ui.search.placeholder =
+    jobMode === "person" ? "Search person, company, title, or URL" : "Search company, country, or URL";
 
   const matched = rows.filter((row) => row.status === "MATCHED").length;
   const confirmed = rows.filter((row) => row.status === "USER_CONFIRMED").length;
@@ -549,7 +612,9 @@ function renderRow(row: ResultRow): HTMLTableRowElement {
   const checkbox = document.createElement("input");
   checkbox.type = "checkbox";
   checkbox.checked = state.selected.has(row.id);
-  checkbox.setAttribute("aria-label", `Select row ${row.rowIndex}: ${row.raw.companyName}`);
+  const displayName = rowDisplayName(row.raw);
+  const subtitle = rowSubtitle(row.raw);
+  checkbox.setAttribute("aria-label", `Select row ${row.rowIndex}: ${displayName}`);
   checkbox.addEventListener("change", () => {
     if (checkbox.checked) state.selected.add(row.id);
     else state.selected.delete(row.id);
@@ -562,16 +627,16 @@ function renderRow(row: ResultRow): HTMLTableRowElement {
   tr.append(number);
 
   const companyCell = createElement("td", "company-cell");
-  companyCell.append(createElement("strong", undefined, row.raw.companyName));
-  if (row.raw.alias) companyCell.append(createElement("small", undefined, `Alias: ${row.raw.alias}`));
+  companyCell.append(createElement("strong", undefined, displayName));
+  if (subtitle) companyCell.append(createElement("small", undefined, subtitle));
   tr.append(companyCell);
 
   const contextCell = createElement("td", "context-cell");
   contextCell.dataset.label = "Context";
-  const location = [row.raw.city, row.raw.region, row.raw.country].filter(Boolean).join(", ");
-  if (!location && !row.raw.officialDomain) contextCell.classList.add("context-cell--empty");
-  contextCell.append(createElement("span", undefined, location || "—"));
-  contextCell.append(createElement("span", undefined, row.raw.officialDomain ?? ""));
+  const contextLines = rowContextLines(row.raw);
+  if (contextLines.length === 0) contextCell.classList.add("context-cell--empty");
+  contextCell.append(createElement("span", undefined, contextLines[0] ?? "—"));
+  if (contextLines[1]) contextCell.append(createElement("span", undefined, contextLines[1]));
   tr.append(contextCell);
 
   const statusCell = createElement("td");
@@ -580,7 +645,11 @@ function renderRow(row: ResultRow): HTMLTableRowElement {
 
   const urlCell = createElement("td", "url-cell");
   urlCell.dataset.label = "Selected URL";
-  if (row.selectedUrl && row.selectedUrl.startsWith("https://www.linkedin.com/company/")) {
+  if (
+    row.selectedUrl &&
+    (row.selectedUrl.startsWith("https://www.linkedin.com/company/") ||
+      row.selectedUrl.startsWith("https://www.linkedin.com/in/"))
+  ) {
     const link = createElement("a", undefined, row.selectedUrl.replace("https://www.linkedin.com", ""));
     link.href = row.selectedUrl;
     link.target = "_blank";
@@ -642,6 +711,7 @@ function renderRow(row: ResultRow): HTMLTableRowElement {
 }
 
 function render(): void {
+  renderMode();
   renderBuildBadge();
   renderIntake();
   renderJob();
@@ -658,11 +728,32 @@ function setImportResult(result: ImportResult | null): void {
 }
 
 function updatePasteImport(): void {
-  setImportResult(parsePaste(ui.paste.value));
+  setImportResult(state.mode === "person" ? parsePeoplePaste(ui.paste.value) : parsePaste(ui.paste.value));
 }
 
 function updateCsvImport(text: string): void {
-  setImportResult(parseCsvToRows(text));
+  setImportResult(state.mode === "person" ? parsePeopleCsvToRows(text) : parseCsvToRows(text));
+}
+
+function reparseActiveTab(): void {
+  if (state.activeTab === "paste") {
+    updatePasteImport();
+    return;
+  }
+  if (ui.csvFileName.dataset["hasFile"] === "true") updateCsvImport(ui.csvFileName.dataset["text"] ?? "");
+  else setImportResult(null);
+}
+
+function setMode(mode: RowKind): void {
+  if (state.mode === mode) return;
+  state.mode = mode;
+  state.importResult = null;
+  state.selected.clear();
+  state.page = 1;
+  renderMode();
+  reparseActiveTab();
+  renderIntake();
+  if (state.snapshot) renderResults();
 }
 
 function selectTab(tab: Tab): void {
@@ -673,10 +764,7 @@ function selectTab(tab: Tab): void {
   ui.tabCsv.tabIndex = tab === "csv" ? 0 : -1;
   ui.panelPaste.hidden = tab !== "paste";
   ui.panelCsv.hidden = tab !== "csv";
-  if (tab === "paste") updatePasteImport();
-  else if (ui.csvFileName.dataset["hasFile"] === "true")
-    updateCsvImport(ui.csvFileName.dataset["text"] ?? "");
-  else setImportResult(null);
+  reparseActiveTab();
 }
 
 async function handleCsvFile(file: File): Promise<void> {
@@ -690,7 +778,6 @@ async function handleCsvFile(file: File): Promise<void> {
     ui.csvFileName.dataset["text"] = text;
     ui.csvFileName.textContent = `${file.name} · ${pluralize(text.split(/\r\n|\r|\n/).length - 1, "line")}`;
     selectTab("csv");
-    updateCsvImport(text);
     toast(`Imported ${file.name}.`);
   } catch (error) {
     toast(errorMessage(error), "error");
@@ -776,7 +863,7 @@ async function openReview(rowId: string): Promise<void> {
 }
 
 function renderReview(row: ResultRow, audit: readonly AuditRecord[]): void {
-  ui.reviewTitle.textContent = row.raw.companyName;
+  ui.reviewTitle.textContent = rowDisplayName(row.raw);
   ui.reviewSubtitle.textContent = `Row #${row.rowIndex} · ${STATUS_LABELS[row.status]} · ${
     row.provider ? `provider ${row.provider}` : "no provider"
   }${row.checkedAt ? ` · checked ${formatDateTime(row.checkedAt)}` : ""}`;
@@ -896,22 +983,39 @@ function renderCandidate(row: ResultRow, candidate: CandidateEvaluation): HTMLEl
   const addSignal = (label: string, className = "chip chip--on"): void => {
     signals.append(createElement("span", className, label));
   };
+  const person = row.evaluation?.kind === "person" || rowKind(row.raw) === "person";
   addSignal(
-    candidate.signals.titleMatch ? "Exact title match" : "Title mismatch",
+    candidate.signals.titleMatch
+      ? person
+        ? "Exact name match"
+        : "Exact title match"
+      : person
+        ? "Name mismatch"
+        : "Title mismatch",
     candidate.signals.titleMatch ? "chip chip--on" : "chip chip--warn",
   );
-  if (candidate.signals.matchedAlias) addSignal("Alias match");
-  if (candidate.signals.domainMentioned) addSignal("Domain mentioned");
-  if (candidate.signals.countryMentioned) addSignal("Country mentioned");
+  if (person) {
+    if (candidate.signals.companyMentioned) addSignal("Company mentioned");
+    if (candidate.signals.jobTitleMentioned) addSignal("Job title mentioned");
+    if (candidate.signals.locationMentioned) addSignal("Location mentioned");
+  } else {
+    if (candidate.signals.matchedAlias) addSignal("Alias match");
+    if (candidate.signals.domainMentioned) addSignal("Domain mentioned");
+    if (candidate.signals.countryMentioned) addSignal("Country mentioned");
+  }
   if (candidate.signals.corroboratedBySecondQuery) addSignal("Second query");
   signals.append(createElement("span", "chip", `Slug overlap ${candidate.signals.slugNameScore.toFixed(2)}`));
-  if (
-    candidate.signals.titleMatch &&
-    !candidate.signals.domainMentioned &&
-    !candidate.signals.countryMentioned &&
-    !candidate.signals.corroboratedBySecondQuery
-  ) {
-    addSignal("Weak corroboration", "chip chip--warn");
+  if (candidate.signals.titleMatch) {
+    const hasContextSignal = person
+      ? Boolean(
+          candidate.signals.companyMentioned ||
+          candidate.signals.jobTitleMentioned ||
+          candidate.signals.locationMentioned,
+        )
+      : Boolean(candidate.signals.domainMentioned || candidate.signals.countryMentioned);
+    if (!hasContextSignal && !candidate.signals.corroboratedBySecondQuery) {
+      addSignal("Weak corroboration", "chip chip--warn");
+    }
   }
   card.append(signals);
 
@@ -1047,16 +1151,33 @@ function openEdit(rowId: string): void {
     return;
   }
   state.editRowId = rowId;
-  ui.editSubtitle.textContent = `Row #${row.rowIndex} · original name “${row.raw.companyName}” · ${STATUS_LABELS[row.status]}`;
-  ui.editCountry.value = row.raw.country ?? "";
-  ui.editRegion.value = row.raw.region ?? "";
-  ui.editCity.value = row.raw.city ?? "";
-  ui.editDomain.value = row.raw.officialDomain ?? "";
-  ui.editWebsite.value = row.raw.officialWebsite ?? "";
-  ui.editAlias.value = row.raw.alias ?? "";
+  ui.editSubtitle.textContent = `Row #${row.rowIndex} · original name “${rowDisplayName(row.raw)}” · ${STATUS_LABELS[row.status]}`;
+  const person = rowKind(row.raw) === "person";
+  ui.editCompanyFields.hidden = person;
+  ui.editPersonFields.hidden = !person;
+  if (row.raw.kind === "person") {
+    ui.editPersonCompany.value = row.raw.company ?? "";
+    ui.editJobTitle.value = row.raw.jobTitle ?? "";
+    ui.editPersonLocation.value = row.raw.location ?? "";
+    ui.editEmail.value = row.raw.email ?? "";
+    ui.editPhone.value = row.raw.phone ?? "";
+  } else {
+    ui.editPersonCompany.value = "";
+    ui.editJobTitle.value = "";
+    ui.editPersonLocation.value = "";
+    ui.editEmail.value = "";
+    ui.editPhone.value = "";
+  }
+  ui.editCountry.value = row.raw.kind === "person" ? "" : (row.raw.country ?? "");
+  ui.editRegion.value = row.raw.kind === "person" ? "" : (row.raw.region ?? "");
+  ui.editCity.value = row.raw.kind === "person" ? "" : (row.raw.city ?? "");
+  ui.editDomain.value = row.raw.kind === "person" ? "" : (row.raw.officialDomain ?? "");
+  ui.editWebsite.value = row.raw.kind === "person" ? "" : (row.raw.officialWebsite ?? "");
+  ui.editAlias.value = row.raw.kind === "person" ? "" : (row.raw.alias ?? "");
   ui.editNotes.value = row.raw.notes ?? "";
   if (!ui.editDialog.open) ui.editDialog.showModal();
-  ui.editDomain.focus();
+  if (person) ui.editPersonCompany.focus();
+  else ui.editDomain.focus();
 }
 
 async function exportCsv(): Promise<void> {
@@ -1189,6 +1310,13 @@ let pasteTimer: ReturnType<typeof setTimeout> | null = null;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 
 function bindEvents(): void {
+  for (const button of ui.modeButtons) {
+    button.addEventListener("click", () => {
+      const mode = button.dataset.mode;
+      if (mode === "person" || mode === "company") setMode(mode);
+    });
+  }
+
   ui.tabPaste.addEventListener("click", () => selectTab("paste"));
   ui.tabCsv.addEventListener("click", () => selectTab("csv"));
   ui.tabPaste.addEventListener("keydown", (event) => {
@@ -1210,6 +1338,14 @@ function bindEvents(): void {
   });
 
   ui.loadExample.addEventListener("click", () => {
+    if (state.mode === "person") {
+      ui.csvFileName.dataset["hasFile"] = "true";
+      ui.csvFileName.dataset["text"] = PEOPLE_SAMPLE_CSV;
+      ui.csvFileName.textContent = "people-example.csv";
+      selectTab("csv");
+      toast("Loaded a people example with company, title, and location context.");
+      return;
+    }
     ui.paste.value = "Microsoft\nExample Private Ltd\nAcme\nUmbrella\nInitech";
     selectTab("paste");
     ui.paste.focus();
@@ -1238,7 +1374,9 @@ function bindEvents(): void {
   });
 
   ui.downloadSample.addEventListener("click", () => {
-    void downloadText("company-page-finder_sample.csv", `\uFEFF${SAMPLE_CSV}`, "text/csv;charset=utf-8");
+    const sample = state.mode === "person" ? PEOPLE_SAMPLE_CSV : SAMPLE_CSV;
+    const name = state.mode === "person" ? "people-sample.csv" : "company-sample.csv";
+    void downloadText(name, `\uFEFF${sample}`, "text/csv;charset=utf-8");
   });
 
   ui.start.addEventListener("click", () => void startBatch());
@@ -1371,15 +1509,26 @@ function bindEvents(): void {
   ui.editForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     if (!state.editRowId || !state.snapshot) return;
-    const context = {
-      country: ui.editCountry.value.trim(),
-      region: ui.editRegion.value.trim(),
-      city: ui.editCity.value.trim(),
-      officialDomain: ui.editDomain.value.trim(),
-      officialWebsite: ui.editWebsite.value.trim(),
-      alias: ui.editAlias.value.trim(),
-      notes: ui.editNotes.value.trim(),
-    };
+    const editingRow = state.rows.find((entry) => entry.id === state.editRowId);
+    const context =
+      editingRow && rowKind(editingRow.raw) === "person"
+        ? {
+            company: ui.editPersonCompany.value.trim(),
+            jobTitle: ui.editJobTitle.value.trim(),
+            location: ui.editPersonLocation.value.trim(),
+            email: ui.editEmail.value.trim(),
+            phone: ui.editPhone.value.trim(),
+            notes: ui.editNotes.value.trim(),
+          }
+        : {
+            country: ui.editCountry.value.trim(),
+            region: ui.editRegion.value.trim(),
+            city: ui.editCity.value.trim(),
+            officialDomain: ui.editDomain.value.trim(),
+            officialWebsite: ui.editWebsite.value.trim(),
+            alias: ui.editAlias.value.trim(),
+            notes: ui.editNotes.value.trim(),
+          };
     try {
       await sendMessage<ResultRow>({
         type: "row:update-context",
@@ -1414,6 +1563,10 @@ async function loadData(): Promise<void> {
   renderIntake();
   renderGlobalBanner();
   await refresh(true);
+  if (state.snapshot?.job.mode && state.snapshot.job.mode !== state.mode) {
+    state.mode = state.snapshot.job.mode;
+    renderMode();
+  }
 }
 
 async function init(): Promise<void> {

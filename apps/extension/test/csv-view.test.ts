@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { evaluateLookup, type Evaluation } from "@clf/matching";
-import { FIXTURE_TIME, FIXTURE_COMPANIES, fixtureResult } from "@clf/fixtures";
+import { FIXTURE_TIME, FIXTURE_COMPANIES, PEOPLE_SAMPLE_CSV, fixtureResult } from "@clf/fixtures";
 import {
   exportFilename,
   parseCsv,
   parseCsvToRows,
   parsePaste,
+  parsePeopleCsvToRows,
+  parsePeoplePaste,
   rowsToCsv,
   rowsToJson,
   SAMPLE_CSV,
 } from "../src/ui/csv.js";
 import { filterRows, paginate, sortRows } from "../src/ui/view.js";
 import type { Job, ResultRow } from "../src/types.js";
+import { rowDisplayName } from "../src/job/rows.js";
 
 const META = { provider: "fixture", checkedAt: FIXTURE_TIME };
 
@@ -94,7 +97,7 @@ describe("parseCsvToRows", () => {
       officialDomain: "microsoft.com",
       officialWebsite: "https://www.microsoft.com",
     });
-    expect(result.rows[1]?.alias).toBe("Example Pvt Ltd");
+    expect((result.rows[1] as { alias?: string }).alias).toBe("Example Pvt Ltd");
   });
 
   it("accepts tolerant header aliases", () => {
@@ -115,7 +118,9 @@ describe("parseCsvToRows", () => {
         "Globex,,ftp://example.com\n" +
         "Initech,,https://initech.example\n",
     );
-    expect(result.rows.map((row) => row.companyName)).toEqual(["Initech"]);
+    expect(result.rows.map((row) => (row.kind === "person" ? row.fullName : row.companyName))).toEqual([
+      "Initech",
+    ]);
     expect(result.errors.map((error) => error.line)).toEqual([2, 3, 4]);
   });
 
@@ -128,6 +133,64 @@ describe("parseCsvToRows", () => {
 
   it("rejects an empty file", () => {
     expect(parseCsvToRows("").errors[0]?.message).toMatch(/empty/);
+  });
+});
+
+describe("people CSV", () => {
+  it("imports people with company, title, location, and contact columns", () => {
+    const result = parsePeopleCsvToRows(PEOPLE_SAMPLE_CSV);
+    expect(result.errors).toEqual([]);
+    expect(result.rows).toHaveLength(4);
+    expect(result.rows[0]).toMatchObject({
+      kind: "person",
+      fullName: "Ada Lovelace",
+      company: "Analytical Engines",
+      jobTitle: "Mathematician",
+      location: "London, England",
+      email: "ada@example.test",
+    });
+  });
+
+  it("requires a full_name column and validates contact fields", () => {
+    expect(
+      parsePeopleCsvToRows("company,job_title\nAnalytical Engines,Mathematician\n").errors[0]?.message,
+    ).toMatch(/full_name column/);
+    const badEmail = parsePeopleCsvToRows("full_name,email\nAda Lovelace,not-an-email\n");
+    expect(badEmail.rows).toEqual([]);
+    expect(badEmail.errors[0]?.message).toMatch(/email/);
+  });
+
+  it("parses a name-only people paste and records duplicates", () => {
+    const result = parsePeoplePaste("Ada Lovelace\n\nada lovelace\nGrace Hopper");
+    expect(result.rows).toHaveLength(3);
+    expect(result.duplicateRows).toBe(1);
+    expect(result.rows[0]).toMatchObject({ kind: "person", fullName: "Ada Lovelace" });
+  });
+
+  it("exports people columns without losing the original row", () => {
+    const person = row({
+      rowIndex: 1,
+      status: "MATCHED",
+      kind: "person",
+      raw: {
+        kind: "person",
+        fullName: "Ada Lovelace",
+        company: "Analytical Engines",
+        jobTitle: "Mathematician",
+        location: "London, England",
+        email: "ada@example.test",
+      },
+      selectedUrl: "https://www.linkedin.com/in/ada-lovelace/",
+      confidence: "high",
+      evaluation: null,
+    });
+    const csv = rowsToCsv([person]);
+    expect(csv).toContain("kind,company_name,full_name,job_title");
+    expect(csv).toContain("person,,Ada Lovelace,Mathematician");
+    expect(csv).toContain("https://www.linkedin.com/in/ada-lovelace/");
+    const json = rowsToJson([person], job, "1.0.0", FIXTURE_TIME);
+    expect(json.rows[0]?.kind).toBe("person");
+    expect(json.rows[0]?.raw).toMatchObject({ fullName: "Ada Lovelace", email: "ada@example.test" });
   });
 });
 
@@ -209,7 +272,7 @@ describe("rowsToJson", () => {
     });
     const json = rowsToJson([matched], job, "1.0.0", FIXTURE_TIME);
     expect(json.product).toBe("Company Page Finder");
-    expect(json.rows[0]?.raw.companyName).toBe("Microsoft");
+    expect((json.rows[0]?.raw as { companyName?: string }).companyName).toBe("Microsoft");
     expect(json.rows[0]?.evaluation?.candidates.length).toBeGreaterThan(0);
     expect(json.job.id).toBe(job.id);
     expect(JSON.parse(JSON.stringify(json)).rows[0].evaluation.candidates[0].discoveredUrl).toContain(
@@ -248,7 +311,7 @@ describe("view helpers", () => {
   });
 
   it("sorts by company, status, and row number", () => {
-    expect(sortRows(rows, "company", "asc").map((entry) => entry.raw.companyName)[0]).toBe("Acme");
+    expect(sortRows(rows, "company", "asc").map((entry) => rowDisplayName(entry.raw))[0]).toBe("Acme");
     expect(sortRows(rows, "rowIndex", "desc")[0]?.rowIndex).toBe(6);
     expect(sortRows(rows, "status", "asc")[0]?.status).toBe("PENDING");
   });

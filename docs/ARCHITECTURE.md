@@ -48,6 +48,8 @@ The split is deliberate: the browser never holds a paid provider key, and the se
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
+The extension has two lookup modes. Company mode validates `/company/<slug>` using company/title/domain/country evidence. People mode validates `/in/<slug>` using exact person-name evidence plus at least one supplied company, job-title, or location signal. The optional BYOK AI client sits beside the resolver client: it can propose up to two site-restricted `/in/` queries for a people batch, but its output is validated as query text and never treated as a URL or a decision.
+
 ## Why the server does not decide matches
 
 “Which company does this page belong to?” is a product judgment that must be explainable and reproducible. Keeping it in the extension means:
@@ -63,14 +65,15 @@ The server still validates input, plans queries, bounds cost, and never returns 
 
 ### `packages/matching` (pure)
 
-| Module          | Responsibility                                                                                                          |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `url.ts`        | Strict parser for `linkedin.com/company/<slug>`; canonicalization of discovered URLs only.                              |
-| `normalize.ts`  | Unicode/case/punctuation normalization, legal-suffix removal, domains, countries, title entity extraction, de-dup keys. |
-| `query.ts`      | Conservative query planner, query sanitization, company-site restriction checks.                                        |
-| `evaluate.ts`   | Candidate grouping, deterministic signals, verdicts, decision, explanation codes.                                       |
-| `api-schema.ts` | Shared request/response validation for the resolver contract.                                                           |
-| `labels.ts`     | Status/query/reason labels used by the UI and exports.                                                                  |
+| Module          | Responsibility                                                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `url.ts`        | Strict parsers for `linkedin.com/company/<slug>` and `linkedin.com/in/<slug>`; canonicalization of discovered URLs only.                                       |
+| `normalize.ts`  | Unicode/case/punctuation normalization, legal-suffix removal, domains, countries, title entity extraction, de-dup keys.                                        |
+| `person.ts`     | Person name normalization (`Last, First`, credentials), profile title extraction, `/in/` query planning, AI query validation, deterministic person evaluation. |
+| `query.ts`      | Conservative query planner, query sanitization, company-site restriction checks.                                                                               |
+| `evaluate.ts`   | Candidate grouping, deterministic signals, verdicts, decision, explanation codes.                                                                              |
+| `api-schema.ts` | Shared request/response validation for the resolver contract.                                                                                                  |
+| `labels.ts`     | Status/query/reason labels used by the UI and exports.                                                                                                         |
 
 No network, no DOM, no clocks, no randomness, no AI. The same inputs always produce the same output.
 
@@ -103,6 +106,9 @@ Endpoints:
 | `storage/repository.ts`        | Storage interface + in-memory implementation for tests.                                        |
 | `storage/idb.ts`               | IndexedDB implementation (jobs, rows, lookups, audit).                                         |
 | `api/client.ts`                | Authenticated fetch, timeout, HTTP error mapping, response schema validation.                  |
+| `ai/client.ts`                 | BYOK Gemini/xAI/OpenRouter query suggestions; validates queries, never URLs.                   |
+| `ai/settings.ts`               | Local AI provider/key/model storage and validation.                                            |
+| `ai/permissions.ts`            | Optional AI host-permission checks and user-gesture requests.                                  |
 | `ui/*`                         | Accessible full-page workspace, review drawer, CSV/JSON, options.                              |
 | `settings.ts`                  | Settings defaults and pure validation.                                                         |
 
@@ -142,12 +148,12 @@ createJob ──► PENDING rows/lookups
 
 Database: `companyPageFinder`
 
-| Store     | Key                     | Indexes                                    | Contents                                                                                         |
-| --------- | ----------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
-| `jobs`    | `id`                    | —                                          | Job state, counts, batch size, operator, pause/cooldown metadata.                                |
-| `rows`    | `id` (`jobId:rowIndex`) | `jobId`, `jobId_status`, `jobId_lookupKey` | Original input row, lookup key, status, selected URL, full evaluation, confirmation, rejections. |
-| `lookups` | `key` (`jobId           | lookupKey`)                                | `jobId`, `jobId_status`                                                                          | Representative input, planned queries, evaluation or error. |
-| `audit`   | `id`                    | `jobId`                                    | Job and human-decision audit entries.                                                            |
+| Store     | Key                     | Indexes                                    | Contents                                                                                                   |
+| --------- | ----------------------- | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `jobs`    | `id`                    | —                                          | Job state, mode (company/person), counts, batch size, operator, pause/cooldown metadata, AI fallback note. |
+| `rows`    | `id` (`jobId:rowIndex`) | `jobId`, `jobId_status`, `jobId_lookupKey` | Original input row, lookup key, status, selected URL, full evaluation, confirmation, rejections.           |
+| `lookups` | `key` (`jobId           | lookupKey`)                                | `jobId`, `jobId_status`                                                                                    | Representative input, planned queries, evaluation or error. |
+| `audit`   | `id`                    | `jobId`                                    | Job and human-decision audit entries.                                                                      |
 
 `chrome.storage.local` holds only settings (`accessToken`, operator name, batch size, retention days). Jobs never go there.
 
@@ -219,8 +225,10 @@ Error responses use `{ "error": { "code", "message", "retryable", "requestId" } 
 | XSS from provider titles/snippets            | All provider text is rendered with `textContent`; links are restricted to canonical `https://www.linkedin.com/company/…`; no `innerHTML` with data.              |
 | CSRF/abuse of the resolver                   | JSON + `Authorization` header (preflight for browsers), bearer token, rate limit, body limit, optional origin allowlist.                                         |
 | Log leakage                                  | Logs exclude names, URLs, queries, tokens, and payloads.                                                                                                         |
+| AI key theft from the local profile          | AI keys are local-only, never exported/logged; Settings warns that profile access can read them. Delete-all and rotation guidance are provided.                  |
+| AI hallucination or prompt injection         | AI output is accepted only as a site-restricted query containing the exact name and no URL; the resolver validates again; AI never returns or ranks a URL.       |
 | Extension compromise                         | Narrow permissions, no content scripts, no remote code, restrictive CSP.                                                                                         |
-| Data at rest on a shared computer            | Settings token and job data are local to the browser profile; delete-all in Settings; retention defaults to 30 days.                                             |
+| Data at rest on a shared computer            | Settings token/AI key and job data are local to the browser profile; delete-all in Settings; retention defaults to 30 days.                                      |
 
 ## Provider adapter model
 

@@ -13,6 +13,33 @@
   margin-top: 20px;
 }
 
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 16px 0 10px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.checkbox-row input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+#ai-form .grid-2 {
+  margin-top: 16px;
+}
+
+#ai-form .field {
+  margin-bottom: 12px;
+}
+
+#ai-form .row {
+  margin-top: 14px;
+}
+
 .endpoint {
   display: block;
   padding: 10px 12px;

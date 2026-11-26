@@ -95,3 +95,8 @@ export function planQueries(input: LookupContext & { companyName: string }): Pla
 export function isCompanyRestrictedQuery(query: string): boolean {
   return /(^|\s)site:linkedin\.com\/company\/?(\s|$)/i.test(query);
 }
+
+/** Defense in depth: a person candidate must have come from a profile-restricted query. */
+export function isProfileRestrictedQuery(query: string): boolean {
+  return /(^|\s)site:linkedin\.com\/in\/?(\s|$)/i.test(query);
+}

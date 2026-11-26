@@ -38,7 +38,8 @@ export const TERMINAL_ROW_STATUSES: readonly RowStatus[] = [
   "NOT_FOUND",
 ];
 
-export type QueryShape = "primary" | "domain" | "country" | "alias" | "reshaped";
+export type QueryShape =
+  "primary" | "company" | "domain" | "country" | "alias" | "title" | "location" | "ai" | "reshaped";
 
 export type PlannedQuery = {
   query: string;
@@ -58,9 +59,32 @@ export type LookupContext = {
   notes?: string;
 };
 
-export type ApiLookup = LookupContext & {
-  id: string;
+export type CompanyInput = LookupContext & {
   companyName: string;
+  kind?: "company";
+};
+
+/**
+ * Person lookup input. Email/phone are local context for export only: they are
+ * never sent to the search provider or to an AI provider.
+ */
+export type PersonInput = {
+  kind: "person";
+  fullName: string;
+  company?: string;
+  jobTitle?: string;
+  location?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  /** Optional AI-generated queries; validated and restricted to /in/ search. */
+  extraQueries?: string[];
+};
+
+export type LookupInput = CompanyInput | PersonInput;
+
+export type ApiLookup = LookupInput & {
+  id: string;
 };
 
 /** One provider result, verbatim, before any filtering. */
@@ -128,6 +152,10 @@ export type CandidateSignals = {
   domainMentioned: boolean;
   countryMentioned: boolean;
   cityMentioned: boolean;
+  /** Person-specific corroboration signals. */
+  companyMentioned?: boolean;
+  jobTitleMentioned?: boolean;
+  locationMentioned?: boolean;
   /** Same canonical URL returned by a differently shaped query. */
   corroboratedBySecondQuery: boolean;
   /** 0..1 token overlap between slug and name. Ordering/audit only — never auto-selects. */
@@ -165,6 +193,7 @@ export type EvaluationStats = {
 };
 
 export type Evaluation = {
+  kind: "company" | "person";
   status: BaseStatus;
   selectedUrl: string | null;
   confidence: "high" | "low" | "none";

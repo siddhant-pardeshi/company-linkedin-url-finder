@@ -30,23 +30,24 @@
 
 | Permission                 | Justification                                                                                                                                                                 |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `storage`                  | Persist the user’s resolver token, batching preferences, and retention choice locally. No remote sync.                                                                        |
+| `storage`                  | Persist the user’s resolver token, optional AI API key, batching preferences, and retention choice locally. No remote sync.                                                   |
 | `alarms`                   | Keep a checkpointed batch moving and resume after a Manifest V3 service worker sleeps or a provider cooldown ends. Without it, jobs would stall when the worker is suspended. |
 | `downloads`                | Let the user save CSV/JSON results. All export generation is local.                                                                                                           |
-| Host `<resolver origin>/*` | Send company lookups to the operator’s resolver, which holds the licensed search-provider key. The origin is fixed at build time; no `<all_urls>`.                            |
+| Host `<resolver origin>/*` | Send company/person lookups to the operator’s resolver, which holds the licensed search-provider key. The origin is fixed at build time; no `<all_urls>`.                     |
+| Optional AI provider hosts | Requested only when the user enables AI query assist for Gemini, xAI, or OpenRouter. Never granted at install.                                                                |
 
-No `tabs`, `activeTab`, `scripting`, `webRequest`, `history`, `cookies`, `management`, `clipboardRead`, or LinkedIn host permissions.
+No `tabs`, `activeTab`, `scripting`, `webRequest`, `history`, `cookies`, `management`, `clipboardRead`, or LinkedIn host permissions. Optional AI hosts are limited to `generativelanguage.googleapis.com`, `api.x.ai`, and `openrouter.ai`.
 
 ## Single purpose
 
-“Resolve a bulk list of company names to evidence-backed LinkedIn company page URLs, with human review for ambiguity.”
+“Resolve a bulk list of company names or people to evidence-backed LinkedIn company page or profile URLs, with human review for ambiguity.”
 
 ## Data usage disclosures
 
 Suggested answers (verify against the deployed implementation):
 
 - Does the extension collect personally identifiable information? **No**, not for the extension’s own use. Company names and optional business context are transmitted to the operator’s resolver to perform the requested lookup. No user accounts or profile data.
-- Authentication information? **Yes** — a user-provisioned resolver access token is stored locally to authenticate API requests.
+- Authentication information? **Yes** — a user-provisioned resolver access token and, if AI assist is enabled, the user’s AI provider key are stored locally to authenticate those requests.
 - Personal communications, health, financial, location, web history? **No.**
 - Website content? **No.** The extension does not read pages, inject content scripts, or access LinkedIn.
 - Selling data to third parties? **No.**
@@ -54,7 +55,7 @@ Suggested answers (verify against the deployed implementation):
 - Using data to determine creditworthiness or for lending? **No.**
 - Remote code? **No.** All JavaScript is bundled at build time; no `eval`, no CDN scripts.
 
-The provider receives search queries derived from company names and optional context. Disclose the provider relationship and link the operator privacy policy.
+The provider receives search queries derived from company/person names and optional context. If the user enables AI assist, the selected AI provider receives only person name, company, job title, and location, and returns query text only. Disclose both provider relationships and link the operator privacy policy.
 
 ## Listing copy
 
@@ -66,9 +67,9 @@ The provider receives search queries derived from company names and optional con
 
 **Detailed description:**
 
-> Company Page Finder helps you clean up a list of company names. Paste up to 5,000 names or import a CSV with optional country, domain, and alias context.
+> Company Page Finder helps you clean up a list of company names or people. Paste up to 5,000 names or import a CSV with optional company, country, domain, alias, job-title, and location context. Email and phone stay local for export.
 >
-> Every URL must come from a licensed search provider and pass strict validation. The matching rules are deterministic: no language model, no guessed slugs, no LinkedIn scraping, no login. If two pages could be the same company, or the evidence is weak, the row goes to Review with no URL selected.
+> Every URL must come from a licensed search provider and pass strict validation. The matching rules are deterministic: no language model, no guessed slugs, no LinkedIn scraping, no login. If two pages or profiles could be the match, or the evidence is weak, the row goes to Review with no URL selected. An optional BYOK AI assistant (Gemini, Grok, or OpenRouter) can add validated search angles, but it never chooses a URL.
 >
 > Features: resumable batches, pause/cancel/retry, sortable results, per-candidate evidence, human accept/reject with a local audit trail, CSV/JSON export including errors and review rows.
 >
@@ -140,6 +141,7 @@ Provide the reviewer token privately in the store dashboard, not in the listing 
 
 ## Version history
 
-| Version | Date       | Notes                               |
-| ------- | ---------- | ----------------------------------- |
-| 1.0.0   | 2026-11-26 | Initial local build; not submitted. |
+| Version | Date       | Notes                                                                        |
+| ------- | ---------- | ---------------------------------------------------------------------------- |
+| 1.1.0   | 2026-11-26 | People mode, BYOK AI query assist, CSV people/company export; not submitted. |
+| 1.0.0   | 2026-11-26 | Initial local build; not submitted.                                          |

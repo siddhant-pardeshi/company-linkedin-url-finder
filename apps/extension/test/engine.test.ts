@@ -1,9 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { FIXTURE_TIME, fixtureResultsFor } from "@clf/fixtures";
+import { FIXTURE_TIME, fixtureResultsFor, personFixtureResultsFor } from "@clf/fixtures";
 import { DEFAULT_SETTINGS } from "../src/settings.js";
 import { MemoryRepository } from "../src/storage/repository.js";
 import { EngineError, JobEngine, type EngineClient } from "../src/job/engine.js";
+import type { ApiLookup } from "@clf/matching";
 import type { AppSettings, RawRow } from "../src/types.js";
+
+function inputName(lookup: ApiLookup): string {
+  return lookup.kind === "person" ? lookup.fullName : lookup.companyName;
+}
+
+function inputDomain(lookup: ApiLookup): string | undefined {
+  return lookup.kind === "person" ? undefined : lookup.officialDomain;
+}
 
 const TOKEN_SETTINGS: AppSettings = {
   ...DEFAULT_SETTINGS,
@@ -33,7 +42,7 @@ class TestClient implements EngineClient {
     idempotencyKey: string,
   ): ReturnType<EngineClient["search"]> {
     this.calls.push({
-      keys: lookups.map((lookup) => lookup.companyName),
+      keys: lookups.map(inputName),
       idempotencyKey,
       lookups: lookups.length,
     });
@@ -53,7 +62,7 @@ function responseFor(
     provider: "fake",
     generatedAt: FIXTURE_TIME,
     results: lookups.map((lookup) => {
-      const query = `site:linkedin.com/company/ "${lookup.companyName}"`;
+      const query = `site:linkedin.com/company/ "${inputName(lookup)}"`;
       return {
         id: lookup.id,
         queries: [{ query, shape: "primary" as const, rationale: "test" }],
@@ -68,15 +77,15 @@ function responseFor(
 function generatedClient(): TestClient {
   return new TestClient(async (lookups) =>
     responseFor(lookups, (lookup, query) => {
-      const slug = lookup.companyName
+      const slug = inputName(lookup)
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
       return [
         {
           originalUrl: `https://www.linkedin.com/company/${slug}/`,
-          title: `${lookup.companyName} | LinkedIn`,
-          snippet: lookup.officialDomain ?? "",
+          title: `${inputName(lookup)} | LinkedIn`,
+          snippet: inputDomain(lookup) ?? "",
           provider: "fake",
           query,
           shape: "primary",
@@ -93,6 +102,27 @@ function acmeClient(): TestClient {
   );
 }
 
+function personClient(fullName = "Ada Lovelace"): TestClient {
+  return new TestClient(async (lookups) => {
+    const queryFor = (lookup: ApiLookup) => `site:linkedin.com/in/ "${inputName(lookup)}"`;
+    return {
+      schemaVersion: 1 as const,
+      provider: "fake",
+      generatedAt: FIXTURE_TIME,
+      results: lookups.map((lookup) => {
+        const query = queryFor(lookup);
+        return {
+          id: lookup.id,
+          queries: [{ query, shape: "primary" as const, rationale: "test" }],
+          results: personFixtureResultsFor(fullName, query, "primary", FIXTURE_TIME),
+          errors: [],
+          cached: false,
+        };
+      }),
+    };
+  });
+}
+
 function names(count: number): RawRow[] {
   return Array.from({ length: count }, (_, index) => ({ companyName: `Company ${index + 1}` }));
 }
@@ -100,18 +130,31 @@ function names(count: number): RawRow[] {
 type Harness = {
   repo: MemoryRepository;
   clock: { now: number };
-  makeEngine: (client: EngineClient, settings?: AppSettings) => JobEngine;
+  makeEngine: (
+    client: EngineClient,
+    settings?: AppSettings,
+    assist?: (
+      inputs: Array<{ lookupKey: string; input: import("@clf/matching").PersonInput }>,
+    ) => Promise<Record<string, string[]>>,
+  ) => JobEngine;
 };
 
 function harness(): Harness {
   const repo = new MemoryRepository();
   const clock = { now: Date.parse(FIXTURE_TIME) };
-  const makeEngine = (client: EngineClient, settings: AppSettings = TOKEN_SETTINGS) =>
+  const makeEngine = (
+    client: EngineClient,
+    settings: AppSettings = TOKEN_SETTINGS,
+    assist?: (
+      inputs: Array<{ lookupKey: string; input: import("@clf/matching").PersonInput }>,
+    ) => Promise<Record<string, string[]>>,
+  ) =>
     new JobEngine({
       repository: repo,
       client,
       getSettings: async () => settings,
       now: () => new Date(clock.now),
+      ...(assist ? { assistPersonQueries: assist } : {}),
     });
   return { repo, clock, makeEngine };
 }
@@ -298,6 +341,79 @@ describe("JobEngine — batch execution", () => {
     ).rejects.toMatchObject({ code: "invalid_rows" });
     await expect(engine.createJob([{ companyName: "   " }])).rejects.toMatchObject({ code: "invalid_rows" });
   });
+
+  it("processes a person batch and selects only a validated /in/ profile", async () => {
+    const { repo, makeEngine } = harness();
+    const client = personClient();
+    const engine = makeEngine(client);
+    const job = await engine.createJob([
+      {
+        kind: "person",
+        fullName: "Ada Lovelace",
+        company: "Analytical Engines",
+        jobTitle: "Mathematician",
+        location: "London",
+      },
+    ]);
+    await engine.run(job.id);
+    const [row] = await repo.getRows(job.id);
+    expect(job.mode).toBe("person");
+    expect(row?.kind).toBe("person");
+    expect(row?.status).toBe("MATCHED");
+    expect(row?.selectedUrl).toBe("https://www.linkedin.com/in/ada-lovelace/");
+  });
+
+  it("sends validated AI queries to the resolver and surfaces AI failure without failing the batch", async () => {
+    const { repo, makeEngine } = harness();
+    const seen: ApiLookup[] = [];
+    const client = new TestClient(async (lookups) => {
+      seen.push(...lookups);
+      const query = 'site:linkedin.com/in/ "Ada Lovelace"';
+      return {
+        schemaVersion: 1 as const,
+        provider: "fake",
+        generatedAt: FIXTURE_TIME,
+        results: lookups.map((lookup) => ({
+          id: lookup.id,
+          queries: [{ query, shape: "primary" as const, rationale: "test" }],
+          results: personFixtureResultsFor("Ada Lovelace", query, "primary", FIXTURE_TIME),
+          errors: [],
+          cached: false,
+        })),
+      };
+    });
+    const assist = async (items: Array<{ lookupKey: string }>) => ({
+      [items[0]?.lookupKey ?? ""]: ['site:linkedin.com/in/ "Ada Lovelace" "Countess of Lovelace"'],
+    });
+    const engine = makeEngine(client, TOKEN_SETTINGS, assist);
+    const job = await engine.createJob([
+      { kind: "person", fullName: "Ada Lovelace", company: "Analytical Engines" },
+    ]);
+    await engine.run(job.id);
+    expect(seen[0]?.kind).toBe("person");
+    expect(seen[0]?.kind === "person" ? seen[0]?.extraQueries?.[0] : undefined).toContain("Countess");
+    const [row] = await repo.getRows(job.id);
+    expect(row?.status).toBe("MATCHED");
+
+    const failing = makeEngine(personClient(), TOKEN_SETTINGS, async () => {
+      throw new Error("quota exhausted");
+    });
+    const second = await failing.createJob([
+      { kind: "person", fullName: "Ada Lovelace", company: "Analytical Engines" },
+    ]);
+    await failing.run(second.id);
+    expect((await repo.getJob(second.id))?.aiNote).toContain("AI provider request failed");
+    const [secondRow] = await repo.getRows(second.id);
+    expect(secondRow?.status).toBe("MATCHED");
+  });
+
+  it("refuses to mix companies and people in one batch", async () => {
+    const { makeEngine } = harness();
+    const engine = makeEngine(generatedClient());
+    await expect(
+      engine.createJob([{ companyName: "Acme" }, { kind: "person", fullName: "Ada Lovelace" }]),
+    ).rejects.toMatchObject({ code: "invalid_rows" });
+  });
 });
 
 describe("JobEngine — human decisions", () => {
@@ -340,7 +456,7 @@ describe("JobEngine — human decisions", () => {
   it("re-queues a row after context is added and preserves the raw company name", async () => {
     const { repo, makeEngine } = harness();
     const client = new TestClient(async (lookups) => {
-      const hasDomain = lookups.every((lookup) => lookup.officialDomain === "acme.com");
+      const hasDomain = lookups.every((lookup) => inputDomain(lookup) === "acme.com");
       if (!hasDomain) {
         return responseFor(lookups, (_lookup, query) =>
           fixtureResultsFor("Acme", query, "primary", FIXTURE_TIME),
@@ -368,8 +484,9 @@ describe("JobEngine — human decisions", () => {
     await engine.updateRowContext(job.id, before.id, { officialDomain: "acme.com" });
     await engine.run(job.id);
     const [after] = await repo.getRows(job.id);
-    expect(after?.raw.companyName).toBe("Acme");
-    expect(after?.raw.officialDomain).toBe("acme.com");
+    expect(after?.raw.kind).not.toBe("person");
+    expect(after?.raw.kind === "person" ? "" : after?.raw.companyName).toBe("Acme");
+    expect(after?.raw.kind === "person" ? "" : after?.raw.officialDomain).toBe("acme.com");
     expect(after?.status).toBe("MATCHED");
     expect(after?.lookupKey).not.toBe(oldKey);
     expect(await repo.getLookup(job.id, oldKey)).toBeNull();

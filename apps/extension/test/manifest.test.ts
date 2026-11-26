@@ -27,7 +27,11 @@ describe("extension manifest", () => {
     expect((manifest["permissions"] as string[]).sort()).toEqual(["alarms", "downloads", "storage"]);
     expect(manifest["content_scripts"]).toBeUndefined();
     expect(manifest["web_accessible_resources"]).toBeUndefined();
-    expect(manifest["optional_host_permissions"]).toBeUndefined();
+    expect(manifest["optional_host_permissions"]).toEqual([
+      "https://generativelanguage.googleapis.com/*",
+      "https://api.x.ai/*",
+      "https://openrouter.ai/*",
+    ]);
     expect(JSON.stringify(manifest)).not.toContain("<all_urls>");
     expect(JSON.stringify(manifest)).not.toContain("linkedin.com");
   });

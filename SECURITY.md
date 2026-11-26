@@ -20,8 +20,8 @@ This is a small open-source project without a paid bug bounty. Reports are handl
 
 ## Security design summary
 
-- **Secrets** — the search-provider key exists only in the resolver environment/secret store. The extension bundle contains no provider key, endpoint, or header. Resolver access tokens are compared as SHA-256 digests in constant time and never logged.
-- **Permissions** — MV3, `storage` + `alarms` + `downloads`, one resolver host. No content scripts, no `<all_urls>`, no LinkedIn host.
+- **Secrets** — the search-provider key exists only in the resolver environment/secret store. The extension bundle contains no search-provider key, endpoint, or header. Resolver access tokens are compared as SHA-256 digests in constant time and never logged. Optional AI keys are stored locally in `chrome.storage.local` and sent only to the selected AI provider; anyone with profile access can read them, which is documented as a BYOK trade-off.
+- **Permissions** — MV3, `storage` + `alarms` + `downloads`, one resolver host, and three optional AI hosts requested only when assist is enabled. No content scripts, no `<all_urls>`, no LinkedIn host.
 - **Remote code** — none. All JS is bundled at build time; the extension CSP is `script-src 'self'; object-src 'self';`.
 - **Input limits** — 64 KiB request body, 25 lookups, 200-character names, 120–500-character context fields, strict JSON validation, 90-second HTTP ceiling, 50-second batch budget.
 - **URL handling** — exact LinkedIn host/path validation, no redirects, no scraping, no URL construction from input. Selected URLs must be discovered candidates.
@@ -38,6 +38,7 @@ This is a small open-source project without a paid bug bounty. Reports are handl
 - [ ] Rate limits/quotas appropriate for your plan; optional external limiter for multiple instances.
 - [ ] Logs reviewed for accidental data capture; retention configured at the host/proxy.
 - [ ] `ALLOWED_ORIGINS` set only if a web origin legitimately calls the resolver.
+- [ ] AI keys are treated as user secrets: optional host permissions only, no logs/exports, and a clear local-key warning.
 - [ ] Dependency updates (`npm audit`, provider API changes) reviewed.
 - [ ] Store/reviewer tokens scoped to a time-limited test deployment where possible.
 

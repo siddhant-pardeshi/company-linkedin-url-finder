@@ -167,3 +167,85 @@ Acme,,,,,,,
 Umbrella,United Kingdom,,London,,,,
 Initech,,,,,,,
 `;
+
+/** Sanitized person fixtures for the offline provider and tests. */
+export type PersonFixture = {
+  fullName: string;
+  results: FixtureResult[];
+  note: string;
+};
+
+const ADA: PersonFixture = {
+  fullName: "Ada Lovelace",
+  note: "One exact profile with employer, title, and location corroboration.",
+  results: [
+    {
+      url: "https://www.linkedin.com/in/ada-lovelace/?trk=people",
+      title: "Ada Lovelace - Mathematician - Analytical Engines | LinkedIn",
+      snippet: "London, England · Analytical Engines · Mathematics",
+    },
+  ],
+};
+
+const GRACE: PersonFixture = {
+  fullName: "Grace Hopper",
+  note: "One exact profile with employer and title corroboration.",
+  results: [
+    {
+      url: "https://www.linkedin.com/in/grace-hopper/",
+      title: "Grace Hopper - Rear Admiral - United States Navy | LinkedIn",
+      snippet: "Arlington, Virginia · United States Navy · Computer Science",
+    },
+  ],
+};
+
+const ALAN: PersonFixture = {
+  fullName: "Alan Turing",
+  note: "Two exact-name profiles; must be review-required.",
+  results: [
+    {
+      url: "https://www.linkedin.com/in/alan-turing/",
+      title: "Alan Turing - Mathematician | LinkedIn",
+      snippet: "Bletchley, England · Bletchley Park",
+    },
+    {
+      url: "https://www.linkedin.com/in/alan-turing-2/",
+      title: "Alan Turing - Computer Scientist | LinkedIn",
+      snippet: "Manchester, England · University of Manchester",
+    },
+  ],
+};
+
+const NOAH: PersonFixture = {
+  fullName: "Noah Body",
+  note: "No results; not-found demo.",
+  results: [],
+};
+
+export const PERSON_FIXTURES: readonly PersonFixture[] = [ADA, GRACE, ALAN, NOAH];
+
+const personByName = new Map(
+  PERSON_FIXTURES.map((person) => [person.fullName.toLowerCase(), person] as const),
+);
+
+export function findPersonFixture(fullName: string): PersonFixture | undefined {
+  return personByName.get(fullName.trim().toLowerCase());
+}
+
+export function personFixtureResultsFor(
+  fullName: string,
+  query: string,
+  shape: RawSearchResult["shape"],
+  retrievedAt = FIXTURE_TIME,
+): RawSearchResult[] {
+  const person = findPersonFixture(fullName);
+  if (!person) return [];
+  return person.results.map((result) => fixtureResult(result, query, shape, retrievedAt));
+}
+
+export const PEOPLE_SAMPLE_CSV = `full_name,company,job_title,location,email,phone,notes
+Ada Lovelace,Analytical Engines,Mathematician,"London, England",ada@example.test,,
+Grace Hopper,United States Navy,Rear Admiral,"Arlington, Virginia",,,
+Alan Turing,Bletchley Park,Mathematician,"Bletchley, England",,,
+Noah Body,,,,,,
+`;

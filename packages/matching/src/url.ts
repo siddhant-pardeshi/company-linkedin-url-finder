@@ -1,4 +1,4 @@
-/** Strict, dependency-free LinkedIn company-URL validation and canonicalization. */
+/** Strict, dependency-free LinkedIn URL validation and canonicalization. */
 
 export const CANONICAL_ORIGIN = "https://www.linkedin.com";
 
@@ -13,6 +13,7 @@ export const URL_REJECT_REASONS = {
   host: "url_untrusted_host",
   encoding: "url_malformed_encoding",
   path: "url_not_company_path",
+  profilePath: "url_not_profile_path",
   segmentCount: "url_extra_path_segments",
   slug: "url_invalid_slug",
 } as const;
@@ -37,6 +38,10 @@ export type RejectedCompanyUrl = {
 
 export type CompanyUrlParseResult = ParsedCompanyUrl | RejectedCompanyUrl;
 
+/** Profile URLs have the same shape; the canonical path is `/in/<slug>/`. */
+export type ParsedProfileUrl = ParsedCompanyUrl;
+export type ProfileUrlParseResult = CompanyUrlParseResult;
+
 function reject(reason: UrlRejectReason, discoveredUrl: string): RejectedCompanyUrl {
   return { ok: false, reason, discoveredUrl };
 }
@@ -56,13 +61,19 @@ export function isValidCompanySlug(slug: string): boolean {
   return SLUG_PATTERN.test(slug);
 }
 
+export const isValidProfileSlug = isValidCompanySlug;
+
 /**
  * Accept only http(s) URLs on linkedin.com whose path is exactly
- * `/company/<slug>` (optional trailing slash). Everything else — people
- * profiles, jobs, schools, posts, showcase pages, `/company/<slug>/life`,
- * lookalike domains, redirectors — is rejected.
+ * `/<segment>/<slug>` (optional trailing slash). Query strings and fragments
+ * are stripped only after validation; the canonical URL is a normalization of
+ * a discovered URL, never a URL constructed from a name.
  */
-export function parseLinkedInCompanyUrl(raw: string): CompanyUrlParseResult {
+function parseEntityUrl(
+  raw: string,
+  segment: "company" | "in",
+  pathReason: UrlRejectReason,
+): CompanyUrlParseResult {
   const discoveredUrl = String(raw ?? "").trim();
   if (!discoveredUrl) return reject(URL_REJECT_REASONS.empty, discoveredUrl);
   if (discoveredUrl.length > 2048) return reject(URL_REJECT_REASONS.tooLong, discoveredUrl);
@@ -90,7 +101,7 @@ export function parseLinkedInCompanyUrl(raw: string): CompanyUrlParseResult {
 
   const path = url.pathname;
   if (/%2f|%5c/i.test(path)) return reject(URL_REJECT_REASONS.encoding, discoveredUrl);
-  if (path.includes("//")) return reject(URL_REJECT_REASONS.path, discoveredUrl);
+  if (path.includes("//")) return reject(pathReason, discoveredUrl);
 
   let decodedPath: string;
   try {
@@ -102,19 +113,27 @@ export function parseLinkedInCompanyUrl(raw: string): CompanyUrlParseResult {
     return reject(URL_REJECT_REASONS.encoding, discoveredUrl);
   }
 
-  const segments = decodedPath.split("/").filter((segment) => segment.length > 0);
-  if (segments.length === 0) return reject(URL_REJECT_REASONS.path, discoveredUrl);
-  if (segments[0]?.toLowerCase() !== "company") return reject(URL_REJECT_REASONS.path, discoveredUrl);
+  const segments = decodedPath.split("/").filter((entry) => entry.length > 0);
+  if (segments.length === 0) return reject(pathReason, discoveredUrl);
+  if (segments[0]?.toLowerCase() !== segment) return reject(pathReason, discoveredUrl);
   if (segments.length > 2) return reject(URL_REJECT_REASONS.segmentCount, discoveredUrl);
   const slug = segments[1];
-  if (!slug) return reject(URL_REJECT_REASONS.path, discoveredUrl);
+  if (!slug) return reject(pathReason, discoveredUrl);
   if (!isValidCompanySlug(slug)) return reject(URL_REJECT_REASONS.slug, discoveredUrl);
 
   return {
     ok: true,
     discoveredUrl,
-    canonicalUrl: `${CANONICAL_ORIGIN}/company/${slug}/`,
+    canonicalUrl: `${CANONICAL_ORIGIN}/${segment}/${slug}/`,
     slug,
     host,
   };
+}
+
+export function parseLinkedInCompanyUrl(raw: string): CompanyUrlParseResult {
+  return parseEntityUrl(raw, "company", URL_REJECT_REASONS.path);
+}
+
+export function parseLinkedInProfileUrl(raw: string): ProfileUrlParseResult {
+  return parseEntityUrl(raw, "in", URL_REJECT_REASONS.profilePath);
 }

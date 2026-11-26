@@ -95,7 +95,7 @@ describe("IdbRepository", () => {
     await repo.putRows([row("job", 2, "k2"), row("job", 1, "k1"), row("job2", 1, "k1")]);
     const rows = await repo.getRows("job");
     expect(rows.map((entry) => entry.rowIndex)).toEqual([1, 2]);
-    expect(rows[0]?.raw.companyName).toBe("Company 1");
+    expect((rows[0]?.raw as { companyName?: string }).companyName).toBe("Company 1");
 
     const byLookup = await repo.getRowsByLookupKeys("job", ["k1", "k2", "k1"]);
     expect(byLookup).toHaveLength(2);

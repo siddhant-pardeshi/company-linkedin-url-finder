@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Company Page Finder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Find evidence-backed LinkedIn company page URLs from a bulk list, with review for anything ambiguous.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -25,6 +25,11 @@
   },
   "permissions": ["storage", "alarms", "downloads"],
   "host_permissions": ["__RESOLVER_ORIGIN__/*"],
+  "optional_host_permissions": [
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.x.ai/*",
+    "https://openrouter.ai/*"
+  ],
   "options_ui": {
     "page": "options.html",
     "open_in_tab": true

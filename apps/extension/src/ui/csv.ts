@@ -1,12 +1,15 @@
 import {
-  computeLookupKey,
-  normalizeCompanyName,
+  computeLookupKeyFor,
   normalizeDomain,
+  type AuditEntry,
+  type CompanyInput,
   type Evaluation,
+  type LookupInput,
+  type PersonInput,
   type RowStatus,
 } from "@clf/matching";
 import type { Job, RawRow, ResultRow } from "../types.js";
-import type { AuditEntry } from "@clf/matching";
+import { rowKind, rowNormalizedName } from "../job/rows.js";
 
 export type CsvParseError = { line: number; message: string };
 
@@ -25,8 +28,15 @@ export const SAMPLE_CSV = `company_name,country,region,city,official_domain,offi
 Microsoft,United States,Washington,Redmond,microsoft.com,https://www.microsoft.com,,
 Example Private Ltd,India,Maharashtra,Pune,example.in,https://example.in,Example Pvt Ltd,
 Acme,,,,,,,
-Umbrella,United Kingdom,,London,,,,
+Umbrella,,,,,,,
 Initech,,,,,,,
+`;
+
+export const PEOPLE_SAMPLE_CSV = `full_name,company,job_title,location,email,phone,notes
+Ada Lovelace,Analytical Engines,Mathematician,"London, England",ada@example.test,,
+Grace Hopper,United States Navy,Rear Admiral,"Arlington, Virginia",,,
+Alan Turing,Bletchley Park,Mathematician,"Bletchley, England",,,
+Noah Body,,,,,,
 `;
 
 /**
@@ -52,9 +62,7 @@ export function parseCsv(text: string): { records: CsvRecord[]; errors: CsvParse
 
   const pushRecord = (): void => {
     pushField();
-    if (fields.some((value) => value.trim() !== "")) {
-      records.push({ fields, line: recordLine });
-    }
+    if (fields.some((value) => value.trim() !== "")) records.push({ fields, line: recordLine });
     fields = [];
     recordStarted = false;
   };
@@ -92,9 +100,8 @@ export function parseCsv(text: string): { records: CsvRecord[]; errors: CsvParse
 
     if (char === '"') {
       if (field.trim() !== "") {
-        if (errors.length < MAX_ERRORS) {
+        if (errors.length < MAX_ERRORS)
           errors.push({ line, message: "Unexpected quote inside an unquoted field." });
-        }
         field += char;
         index += 1;
         continue;
@@ -145,7 +152,7 @@ export function parseCsv(text: string): { records: CsvRecord[]; errors: CsvParse
   return { records, errors };
 }
 
-const HEADER_ALIASES: Record<string, keyof RawRow> = {
+const COMPANY_HEADER_ALIASES: Record<string, keyof CompanyInput> = {
   company_name: "companyName",
   company: "companyName",
   companyname: "companyName",
@@ -164,6 +171,25 @@ const HEADER_ALIASES: Record<string, keyof RawRow> = {
   note: "notes",
 };
 
+const PERSON_HEADER_ALIASES: Record<string, keyof PersonInput> = {
+  full_name: "fullName",
+  fullname: "fullName",
+  person_name: "fullName",
+  name: "fullName",
+  company: "company",
+  employer: "company",
+  organization: "company",
+  job_title: "jobTitle",
+  title: "jobTitle",
+  role: "jobTitle",
+  location: "location",
+  city: "location",
+  email: "email",
+  phone: "phone",
+  notes: "notes",
+  note: "notes",
+};
+
 function normalizeHeader(value: string): string {
   return value
     .replace(/^\uFEFF/, "")
@@ -172,10 +198,10 @@ function normalizeHeader(value: string): string {
     .replace(/[\s-]+/g, "_");
 }
 
-function headerMap(header: string[]): Map<keyof RawRow, number> {
-  const map = new Map<keyof RawRow, number>();
+function headerMap<T extends string>(header: string[], aliases: Record<string, T>): Map<T, number> {
+  const map = new Map<T, number>();
   header.forEach((name, index) => {
-    const key = HEADER_ALIASES[normalizeHeader(name)];
+    const key = aliases[normalizeHeader(name)];
     if (key && !map.has(key)) map.set(key, index);
   });
   return map;
@@ -186,20 +212,42 @@ function cell(record: CsvRecord, index: number | undefined): string {
   return (record.fields[index] ?? "").trim();
 }
 
-function validateRow(row: RawRow, line: number, errors: CsvParseError[]): boolean {
+function countDuplicates(rows: readonly LookupInput[]): number {
+  const seen = new Set<string>();
+  let duplicates = 0;
+  for (const row of rows) {
+    const key = computeLookupKeyFor(row);
+    if (seen.has(key)) duplicates += 1;
+    else seen.add(key);
+  }
+  return duplicates;
+}
+
+function validateCommonText(
+  value: string,
+  label: string,
+  max: number,
+  line: number,
+  errors: CsvParseError[],
+): boolean {
+  if (value.length > max) {
+    errors.push({ line, message: `${label} must be at most ${max} characters.` });
+    return false;
+  }
+  if (/[\u0000-\u001f\u007f]/.test(value)) {
+    errors.push({ line, message: `${label} contains control characters.` });
+    return false;
+  }
+  return true;
+}
+
+function validateCompanyRow(row: CompanyInput, line: number, errors: CsvParseError[]): boolean {
   if (!row.companyName) {
     errors.push({ line, message: "company_name is required." });
     return false;
   }
-  if (row.companyName.length > 200) {
-    errors.push({ line, message: "company_name must be at most 200 characters." });
-    return false;
-  }
-  if (/[\u0000-\u001f\u007f]/.test(row.companyName)) {
-    errors.push({ line, message: "company_name contains control characters." });
-    return false;
-  }
-  const limits: Array<[keyof RawRow, number]> = [
+  if (!validateCommonText(row.companyName, "company_name", 200, line, errors)) return false;
+  for (const [field, max] of [
     ["country", 120],
     ["region", 120],
     ["city", 120],
@@ -207,23 +255,22 @@ function validateRow(row: RawRow, line: number, errors: CsvParseError[]): boolea
     ["notes", 500],
     ["officialDomain", 253],
     ["officialWebsite", 400],
-  ];
-  for (const [field, max] of limits) {
+  ] as const) {
     const value = row[field];
-    if (typeof value === "string" && value.length > max) {
-      errors.push({ line, message: `${field} must be at most ${max} characters.` });
-      return false;
-    }
+    if (typeof value === "string" && !validateCommonText(value, field, max, line, errors)) return false;
   }
   if (row.officialDomain && !normalizeDomain(row.officialDomain)) {
     errors.push({ line, message: "official_domain is not a valid domain." });
     return false;
   }
   if (row.officialWebsite) {
-    const website = row.officialWebsite;
     let valid = false;
     try {
-      const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(website) ? website : `https://${website}`);
+      const url = new URL(
+        /^[a-z][a-z0-9+.-]*:\/\//i.test(row.officialWebsite)
+          ? row.officialWebsite
+          : `https://${row.officialWebsite}`,
+      );
       valid =
         (url.protocol === "http:" || url.protocol === "https:") && Boolean(normalizeDomain(url.hostname));
     } catch {
@@ -237,15 +284,30 @@ function validateRow(row: RawRow, line: number, errors: CsvParseError[]): boolea
   return true;
 }
 
-function countDuplicates(rows: readonly RawRow[]): number {
-  const seen = new Set<string>();
-  let duplicates = 0;
-  for (const row of rows) {
-    const key = computeLookupKey(row);
-    if (seen.has(key)) duplicates += 1;
-    else seen.add(key);
+function validatePersonRow(row: PersonInput, line: number, errors: CsvParseError[]): boolean {
+  if (!row.fullName) {
+    errors.push({ line, message: "full_name is required." });
+    return false;
   }
-  return duplicates;
+  if (!validateCommonText(row.fullName, "full_name", 200, line, errors)) return false;
+  for (const [field, max] of [
+    ["company", 200],
+    ["jobTitle", 200],
+    ["location", 200],
+    ["notes", 500],
+  ] as const) {
+    const value = row[field];
+    if (typeof value === "string" && !validateCommonText(value, field, max, line, errors)) return false;
+  }
+  if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) {
+    errors.push({ line, message: "email is not a valid email address." });
+    return false;
+  }
+  if (row.phone && row.phone.length > 40) {
+    errors.push({ line, message: "phone must be at most 40 characters." });
+    return false;
+  }
+  return true;
 }
 
 export function parseCsvToRows(text: string): ImportResult {
@@ -257,7 +319,7 @@ export function parseCsvToRows(text: string): ImportResult {
   }
   const header = records[0];
   if (!header) return result;
-  const map = headerMap(header.fields);
+  const map = headerMap(header.fields, COMPANY_HEADER_ALIASES);
   if (!map.has("companyName")) {
     result.errors.push({
       line: header.line,
@@ -269,21 +331,20 @@ export function parseCsvToRows(text: string): ImportResult {
   for (const record of records.slice(1)) {
     if (record.fields.every((value) => value.trim() === "")) continue;
     result.totalRows += 1;
-    const row: RawRow = { companyName: cell(record, map.get("companyName")) };
-    const optional: Array<keyof RawRow> = [
-      "country",
-      "region",
-      "city",
-      "officialDomain",
-      "officialWebsite",
-      "alias",
-      "notes",
-    ];
-    for (const field of optional) {
+    const row: CompanyInput = { companyName: cell(record, map.get("companyName")) };
+    for (const [field] of [
+      ["country", 1],
+      ["region", 1],
+      ["city", 1],
+      ["officialDomain", 1],
+      ["officialWebsite", 1],
+      ["alias", 1],
+      ["notes", 1],
+    ] as const) {
       const value = cell(record, map.get(field));
       if (value) row[field] = value;
     }
-    if (validateRow(row, record.line, result.errors)) result.rows.push(row);
+    if (validateCompanyRow(row, record.line, result.errors)) result.rows.push(row);
     if (result.errors.length >= MAX_ERRORS) break;
   }
 
@@ -291,42 +352,91 @@ export function parseCsvToRows(text: string): ImportResult {
   return result;
 }
 
-export function parsePaste(text: string): ImportResult {
-  const lines = String(text ?? "").split(/\r\n|\r|\n/);
-  const result: ImportResult = { rows: [], errors: [], duplicateRows: 0, totalRows: 0 };
-  lines.forEach((line, index) => {
-    const companyName = line.trim();
-    const lineNumber = index + 1;
-    if (!companyName) return;
+export function parsePeopleCsvToRows(text: string): ImportResult {
+  const { records, errors } = parseCsv(text);
+  const result: ImportResult = { rows: [], errors, duplicateRows: 0, totalRows: 0 };
+  if (records.length === 0) {
+    result.errors.push({ line: 1, message: "The CSV file is empty." });
+    return result;
+  }
+  const header = records[0];
+  if (!header) return result;
+  const map = headerMap(header.fields, PERSON_HEADER_ALIASES);
+  if (!map.has("fullName")) {
+    result.errors.push({
+      line: header.line,
+      message: "The CSV needs a full_name column (full_name, person_name, or name).",
+    });
+    return result;
+  }
+
+  for (const record of records.slice(1)) {
+    if (record.fields.every((value) => value.trim() === "")) continue;
     result.totalRows += 1;
-    if (companyName.length > 200) {
-      result.errors.push({ line: lineNumber, message: "Company name must be at most 200 characters." });
-      return;
+    const row: PersonInput = { kind: "person", fullName: cell(record, map.get("fullName")) };
+    for (const field of ["company", "jobTitle", "location", "email", "phone", "notes"] as const) {
+      const value = cell(record, map.get(field));
+      if (value) row[field] = value;
     }
-    if (/[\u0000-\u001f\u007f]/.test(companyName)) {
-      result.errors.push({ line: lineNumber, message: "Company name contains control characters." });
-      return;
-    }
+    if (validatePersonRow(row, record.line, result.errors)) result.rows.push(row);
+    if (result.errors.length >= MAX_ERRORS) break;
+  }
+
+  result.duplicateRows = countDuplicates(result.rows);
+  return result;
+}
+
+export function parseCompanyPaste(text: string): ImportResult {
+  const rows = String(text ?? "")
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const result: ImportResult = { rows: [], errors: [], duplicateRows: 0, totalRows: rows.length };
+  rows.forEach((companyName, index) => {
+    const line = index + 1;
+    if (!validateCommonText(companyName, "Company name", 200, line, result.errors)) return;
     result.rows.push({ companyName });
   });
   result.duplicateRows = countDuplicates(result.rows);
   return result;
 }
 
+export function parsePeoplePaste(text: string): ImportResult {
+  const names = String(text ?? "")
+    .split(/\r\n|\r|\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const result: ImportResult = { rows: [], errors: [], duplicateRows: 0, totalRows: names.length };
+  names.forEach((fullName, index) => {
+    const line = index + 1;
+    if (!validateCommonText(fullName, "Full name", 200, line, result.errors)) return;
+    result.rows.push({ kind: "person", fullName });
+  });
+  result.duplicateRows = countDuplicates(result.rows);
+  return result;
+}
+
+/** Backwards-compatible name used by the existing company workspace/tests. */
+export const parsePaste = parseCompanyPaste;
+
 function csvCell(value: unknown): string {
   let text = value === null || value === undefined ? "" : String(value);
   // Prevent spreadsheet formula injection (CSV is commonly opened in Excel).
   if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
-  if (/[",\r\n]/.test(text) || /^\s|\s$/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
+  if (/[",\r\n]/.test(text) || /^\s|\s$/.test(text)) return `"${text.replace(/"/g, '""')}"`;
   return text;
 }
 
 export function rowsToCsv(rows: readonly ResultRow[]): string {
   const headers = [
     "row_number",
+    "kind",
     "company_name",
+    "full_name",
+    "job_title",
+    "location",
+    "email",
+    "phone",
     "normalized_name",
     "country",
     "region",
@@ -349,21 +459,29 @@ export function rowsToCsv(rows: readonly ResultRow[]): string {
   ];
   const lines = [headers.map(csvCell).join(",")];
   for (const row of rows) {
+    const raw = row.raw;
     const evaluation: Evaluation | null = row.evaluation;
     const selected = evaluation?.candidates.find((candidate) => candidate.canonicalUrl === row.selectedUrl);
     const evidence = selected ? selected.notes.join(" ") : (evaluation?.reasons.join(" ") ?? "");
     const reasons = [...(evaluation?.reasonCodes ?? []), ...(row.error ? [row.error.code] : [])];
+    const isPerson = rowKind(raw) === "person";
     lines.push(
       [
         row.rowIndex,
-        row.raw.companyName,
-        normalizeCompanyName(row.raw.companyName).core,
-        row.raw.country ?? "",
-        row.raw.region ?? "",
-        row.raw.city ?? "",
-        row.raw.officialDomain ?? "",
-        row.raw.officialWebsite ?? "",
-        row.raw.alias ?? "",
+        rowKind(raw),
+        isPerson ? "" : (raw as CompanyInput).companyName,
+        isPerson ? (raw as PersonInput).fullName : "",
+        isPerson ? ((raw as PersonInput).jobTitle ?? "") : "",
+        isPerson ? ((raw as PersonInput).location ?? "") : "",
+        isPerson ? ((raw as PersonInput).email ?? "") : "",
+        isPerson ? ((raw as PersonInput).phone ?? "") : "",
+        rowNormalizedName(raw),
+        isPerson ? "" : ((raw as CompanyInput).country ?? ""),
+        isPerson ? "" : ((raw as CompanyInput).region ?? ""),
+        isPerson ? "" : ((raw as CompanyInput).city ?? ""),
+        isPerson ? "" : ((raw as CompanyInput).officialDomain ?? ""),
+        isPerson ? "" : ((raw as CompanyInput).officialWebsite ?? ""),
+        isPerson ? "" : ((raw as CompanyInput).alias ?? ""),
         row.raw.notes ?? "",
         row.status,
         row.selectedUrl ?? "",
@@ -392,6 +510,7 @@ export type JsonExport = {
   audit: AuditEntry[];
   rows: Array<{
     rowNumber: number;
+    kind: "company" | "person";
     raw: RawRow;
     normalizedName: string;
     lookupKey: string;
@@ -422,8 +541,9 @@ export function rowsToJson(
     audit: [...audit],
     rows: rows.map((row) => ({
       rowNumber: row.rowIndex,
+      kind: rowKind(row.raw),
       raw: row.raw,
-      normalizedName: row.evaluation?.normalizedName ?? normalizeCompanyName(row.raw.companyName).core,
+      normalizedName: row.evaluation?.normalizedName ?? rowNormalizedName(row.raw),
       lookupKey: row.lookupKey,
       status: row.status,
       selectedUrl: row.selectedUrl,

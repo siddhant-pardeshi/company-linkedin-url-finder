@@ -1,11 +1,12 @@
 # Acceptable use
 
-Company Page Finder exists to find **public company page URLs** from licensed search-provider evidence for business research and data cleanup.
+Company Page Finder exists to find **public company page and professional profile URLs** from licensed search-provider evidence for business research, recruiting operations, and data cleanup.
 
 ## Allowed
 
 - Resolving company names you are entitled to process.
-- Adding official domains, countries, or aliases to improve disambiguation.
+- Resolving professional profiles when you have a lawful basis to process the supplied person details and will use the result appropriately.
+- Adding official domains, countries, aliases, companies, job titles, or locations to improve disambiguation.
 - Reviewing candidates and recording human decisions locally.
 - Exporting results for internal analysis, CRM cleanup, or vendor review.
 - Self-hosting the resolver with your own provider credentials and terms.
@@ -16,7 +17,8 @@ Company Page Finder exists to find **public company page URLs** from licensed se
 - **Bypassing access controls.** No CAPTCHA solving, IP rotation, login walls, robots bypass, cookies from LinkedIn, or unofficial APIs.
 - **Scraping search-engine result pages.** Use a licensed structured search API with terms that permit your use.
 - **Using an LLM to invent or rank a URL.** The matching path must remain deterministic and evidence-backed.
-- **Collecting personal profiles.** This tool is for company pages, not people.
+- **Collecting personal profiles beyond your lawful basis.** People mode is for specific professional lookups, not bulk harvesting or building a database of individuals without a lawful basis.
+- **Sharing AI keys or provider accounts.** Use your own key; do not resell or expose it, and follow the AI provider’s terms.
 - **Bulk abuse of the resolver.** No attempts to evade quotas, share a token publicly, or resell access without authorization.
 - **Misrepresentation.** Do not claim LinkedIn affiliation, certification, or verification. “High-confidence match” means the deterministic evidence passed; it is not a LinkedIn attestation.
 - **Unlawful processing.** Do not use the tool to violate sanctions, privacy law, contractual restrictions, or the search provider’s terms.

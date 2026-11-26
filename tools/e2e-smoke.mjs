@@ -206,7 +206,15 @@ async function main() {
     await evaluate("document.querySelector('#settings-banner').textContent.includes('provider: mock')"),
     "Connection test reports the mock provider",
   );
-  await screenshot("options.png");
+  check(
+    await evaluate(
+      "document.querySelector('#ai-provider').value === 'gemini' && document.querySelector('#ai-state').textContent === 'Off'",
+    ),
+    "AI assist is present, off by default, and defaults to Gemini",
+  );
+  await evaluate("document.querySelector('#ai-heading').scrollIntoView({ block: 'start' })");
+  await screenshot("options-ai.png", { scrollTop: false });
+  await screenshot("options.png", { scrollTop: true });
 
   // Paste the demo list and start the batch.
   await navigate(`${base}/workspace.html`);
@@ -343,6 +351,78 @@ async function main() {
     "Narrow viewport has no horizontal table overflow",
   );
   await screenshot("workspace-narrow.png", { scroll: "#results-section" });
+
+  // Person mode: CSV with context → deterministic /in/ matching.
+  await cdp.send("Emulation.setDeviceMetricsOverride", {
+    width: 1440,
+    height: 1000,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
+  await navigate(`${base}/workspace.html`);
+  await evaluate("document.querySelector('button[data-mode=\"person\"]').click()");
+  check(
+    await evaluate("document.querySelector('#paste-label').textContent.includes('Full names')"),
+    "People mode switches the input labels",
+  );
+  await evaluate("document.querySelector('#load-example').click()");
+  await waitFor(
+    "document.querySelectorAll('#import-summary .chip').length > 0",
+    "people import summary",
+    5000,
+  );
+  check(
+    await evaluate(
+      "[...document.querySelectorAll('#import-summary .chip')].some((chip) => chip.textContent.includes('4 valid rows'))",
+    ),
+    "People example imports four rows",
+  );
+  check(
+    await evaluate("document.querySelector('#start-button').disabled === false"),
+    "People batch can start",
+  );
+  await evaluate("document.querySelector('#start-button').click()");
+  await waitFor(
+    "document.querySelector('#job-meta').textContent.includes('People') && document.querySelector('#job-state').textContent === 'Completed'",
+    "people batch completion",
+    40_000,
+  );
+  const peopleStats = await evaluate(
+    "[...document.querySelectorAll('.stat__value')].map((el) => el.textContent)",
+  );
+  check(
+    JSON.stringify(peopleStats) === JSON.stringify(["4", "2", "1", "1", "0", "0"]),
+    `People stats are correct: ${peopleStats.join("/")}`,
+  );
+  check(
+    await evaluate("document.querySelector('#company-column-label').textContent === 'Person'"),
+    "Results table relabels the name column for people",
+  );
+  check(
+    await evaluate(`
+      [...document.querySelectorAll('#results-body tr')].some((row) =>
+        row.querySelector('.company-cell strong')?.textContent === 'Ada Lovelace' &&
+        row.querySelector('a')?.href === 'https://www.linkedin.com/in/ada-lovelace/'
+      )
+    `),
+    "Ada Lovelace resolves to the validated /in/ profile",
+  );
+  await evaluate(`
+    (() => {
+      const row = [...document.querySelectorAll('#results-body tr')].find((entry) =>
+        entry.querySelector('.company-cell strong')?.textContent === 'Alan Turing'
+      );
+      row.querySelector('button[data-action="review"]').click();
+      return true;
+    })()
+  `);
+  await waitFor("document.querySelector('#review-dialog').open === true", "people review drawer", 5000);
+  check(
+    await evaluate("document.querySelectorAll('#review-dialog .candidate').length === 2"),
+    "People review drawer shows both exact-name candidates",
+  );
+  await evaluate("document.querySelector('#review-close').click()");
+  await screenshot("workspace-people.png", { scroll: "#results-section" });
 
   const uniqueErrors = [...new Set(browserErrors)].filter(
     (message) => !message.includes("favicon") && !message.includes("net::ERR"),

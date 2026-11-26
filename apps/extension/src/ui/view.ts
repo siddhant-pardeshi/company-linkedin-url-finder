@@ -1,5 +1,6 @@
 import { ROW_STATUSES, type RowStatus } from "@clf/matching";
 import type { ResultRow } from "../types.js";
+import { rowDisplayName, rowSearchBlob } from "../job/rows.js";
 import { computeStats, progressPercent } from "../job/stats.js";
 
 export type StatusFilter = "ALL" | "MATCHED" | "REVIEW_REQUIRED" | "NOT_FOUND" | "ERROR" | "PENDING";
@@ -41,12 +42,7 @@ export function filterRows(rows: readonly ResultRow[], filter: StatusFilter, que
     if (!matchesStatusFilter(row, filter)) return false;
     if (!needle) return true;
     const haystack = [
-      row.raw.companyName,
-      row.raw.country ?? "",
-      row.raw.region ?? "",
-      row.raw.city ?? "",
-      row.raw.officialDomain ?? "",
-      row.raw.alias ?? "",
+      rowSearchBlob(row.raw),
       row.selectedUrl ?? "",
       row.error?.message ?? "",
       row.evaluation?.reasons.join(" ") ?? "",
@@ -66,7 +62,9 @@ export function sortRows(rows: readonly ResultRow[], key: SortKey, direction: So
         delta = a.rowIndex - b.rowIndex;
         break;
       case "company":
-        delta = a.raw.companyName.localeCompare(b.raw.companyName, undefined, { sensitivity: "base" });
+        delta = rowDisplayName(a.raw).localeCompare(rowDisplayName(b.raw), undefined, {
+          sensitivity: "base",
+        });
         break;
       case "status":
         delta = STATUS_RANK[a.status] - STATUS_RANK[b.status];

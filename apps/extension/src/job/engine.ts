@@ -1,11 +1,12 @@
 import {
   assertSelectedUrlWasDiscovered,
-  computeLookupKey,
-  evaluateLookup,
+  computeLookupKeyFor,
+  evaluateLookupFor,
   MAX_COMPANY_NAME_LENGTH,
   type ApiLookup,
   type AuditAction,
   type Evaluation,
+  type PersonInput,
   type RowStatus,
   type SearchResponse,
 } from "@clf/matching";
@@ -35,6 +36,10 @@ export type EngineDeps = {
   repository: Repository;
   client: EngineClient;
   getSettings: () => Promise<AppSettings>;
+  /** Optional, person-only AI query assistance. It can never select a URL. */
+  assistPersonQueries?: (
+    inputs: Array<{ lookupKey: string; input: PersonInput }>,
+  ) => Promise<Record<string, string[]>>;
   now?: () => Date;
   newId?: () => string;
   hash?: (value: string) => Promise<string>;
@@ -85,6 +90,41 @@ function cleanOptional(value: unknown, max: number): string | undefined {
 }
 
 function normalizeRawRow(input: RawRow): RawRow {
+  if (input.kind === "person") {
+    const fullName = String(input.fullName ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!fullName) throw new EngineError("invalid_rows", "Every person row needs a full name.");
+    if (fullName.length > MAX_COMPANY_NAME_LENGTH) {
+      throw new EngineError(
+        "invalid_rows",
+        `Full names must be at most ${MAX_COMPANY_NAME_LENGTH} characters.`,
+      );
+    }
+    if (/[\u0000-\u001f\u007f]/.test(fullName)) {
+      throw new EngineError("invalid_rows", "Names must not contain control characters.");
+    }
+    const person: PersonInput = { kind: "person", fullName };
+    const company = cleanOptional(input.company, 200);
+    const jobTitle = cleanOptional(input.jobTitle, 200);
+    const location = cleanOptional(input.location, 200);
+    const email = cleanOptional(input.email, 254);
+    const phone = cleanOptional(input.phone, 40);
+    const notes = cleanOptional(input.notes, 500);
+    if (company) person.company = company;
+    if (jobTitle) person.jobTitle = jobTitle;
+    if (location) person.location = location;
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        throw new EngineError("invalid_rows", "Email addresses must look like name@example.com.");
+      }
+      person.email = email;
+    }
+    if (phone) person.phone = phone;
+    if (notes) person.notes = notes;
+    return person;
+  }
+
   const companyName = String(input.companyName ?? "")
     .replace(/\s+/g, " ")
     .trim();
@@ -210,6 +250,9 @@ export class JobEngine {
   private readonly repository: Repository;
   private readonly client: EngineClient;
   private readonly getSettings: () => Promise<AppSettings>;
+  private readonly assistPersonQueries:
+    | ((inputs: Array<{ lookupKey: string; input: PersonInput }>) => Promise<Record<string, string[]>>)
+    | undefined;
   private readonly now: () => Date;
   private readonly newId: () => string;
   private readonly hash: (value: string) => Promise<string>;
@@ -220,6 +263,7 @@ export class JobEngine {
     this.repository = deps.repository;
     this.client = deps.client;
     this.getSettings = deps.getSettings;
+    this.assistPersonQueries = deps.assistPersonQueries;
     this.now = deps.now ?? (() => new Date());
     this.newId = deps.newId ?? (() => crypto.randomUUID());
     this.hash = deps.hash ?? sha256Hex;
@@ -268,10 +312,18 @@ export class JobEngine {
     rawRows: readonly RawRow[],
     options: { batchSize?: number; operatorName?: string } = {},
   ): Promise<Job> {
-    if (rawRows.length === 0) throw new EngineError("invalid_rows", "Add at least one company name.");
+    if (rawRows.length === 0) throw new EngineError("invalid_rows", "Add at least one row.");
     if (rawRows.length > MAX_ROWS_PER_JOB) {
       throw new EngineError("invalid_rows", `A batch can contain at most ${MAX_ROWS_PER_JOB} rows.`);
     }
+    const modes = new Set(rawRows.map((input) => (input.kind === "person" ? "person" : "company")));
+    if (modes.size > 1) {
+      throw new EngineError(
+        "invalid_rows",
+        "Start separate batches for companies and people; do not mix them.",
+      );
+    }
+    const mode = modes.values().next().value ?? "company";
     const settings = await this.getSettings();
     const batchSize = clampBatchSize(options.batchSize, settings.batchSize || DEFAULT_BATCH_SIZE);
     const operatorName = (options.operatorName ?? settings.operatorName ?? "Local user").slice(0, 60);
@@ -282,12 +334,13 @@ export class JobEngine {
     const lookupInputs = new Map<string, RawRow>();
     rawRows.forEach((input, index) => {
       const raw = normalizeRawRow(input);
-      const lookupKey = computeLookupKey(raw);
+      const lookupKey = computeLookupKeyFor(raw);
       if (!lookupInputs.has(lookupKey)) lookupInputs.set(lookupKey, raw);
       rows.push({
         id: `${jobId}:${index + 1}`,
         jobId,
         rowIndex: index + 1,
+        kind: mode,
         raw,
         lookupKey,
         status: "PENDING",
@@ -308,6 +361,7 @@ export class JobEngine {
       createdAt: now,
       updatedAt: now,
       state: "running",
+      mode,
       totalRows: rows.length,
       totalLookups: lookupInputs.size,
       batchSize,
@@ -315,6 +369,7 @@ export class JobEngine {
       pauseReason: null,
       lastError: null,
       cooldownUntil: null,
+      aiNote: null,
       startedAt: now,
       finishedAt: null,
     };
@@ -339,10 +394,10 @@ export class JobEngine {
     await this.audit(
       jobId,
       "job_created",
-      `${rows.length} row(s) queued; ${lookups.length} unique lookup(s).`,
+      `${rows.length} ${mode} row(s) queued; ${lookups.length} unique lookup(s).`,
       operatorName,
     );
-    this.logger("job_created", { rows: rows.length, lookups: lookups.length, batchSize });
+    this.logger("job_created", { rows: rows.length, lookups: lookups.length, batchSize, mode });
     return job;
   }
 
@@ -376,10 +431,37 @@ export class JobEngine {
           return;
         }
 
+        let preparedLookups = pending;
+        if (job.mode === "person" && this.assistPersonQueries) {
+          const personInputs = pending.flatMap((lookup) =>
+            lookup.input.kind === "person" ? [{ lookupKey: lookup.lookupKey, input: lookup.input }] : [],
+          );
+          if (personInputs.length > 0) {
+            try {
+              const additions = await this.assistPersonQueries(personInputs);
+              preparedLookups = pending.map((lookup) => {
+                const extra = additions[lookup.lookupKey];
+                if (!extra || extra.length === 0 || lookup.input.kind !== "person") return lookup;
+                return { ...lookup, input: { ...lookup.input, extraQueries: extra.slice(0, 2) } };
+              });
+              await this.repository.putLookups(preparedLookups);
+              await this.setAiNote(jobId, null);
+            } catch (error) {
+              const message =
+                error instanceof Error && error.message
+                  ? `AI provider request failed: ${error.message.slice(0, 240)}`
+                  : "AI provider request failed.";
+              await this.setAiNote(jobId, message);
+            }
+            const afterAi = await this.repository.getJob(jobId);
+            if (!afterAi || afterAi.state !== "running") return;
+          }
+        }
+
         const nowIso = this.nowIso();
-        const keys = pending.map((lookup) => lookup.lookupKey);
+        const keys = preparedLookups.map((lookup) => lookup.lookupKey);
         await this.repository.putLookups(
-          pending.map((lookup) => ({ ...lookup, status: "IN_PROGRESS" as const, updatedAt: nowIso })),
+          preparedLookups.map((lookup) => ({ ...lookup, status: "IN_PROGRESS" as const, updatedAt: nowIso })),
         );
         const batchRows = await this.repository.getRowsByLookupKeys(jobId, keys);
         await this.repository.putRows(
@@ -391,7 +473,7 @@ export class JobEngine {
           })),
         );
 
-        const requestLookups: ApiLookup[] = pending.map((lookup, index) => ({
+        const requestLookups: ApiLookup[] = preparedLookups.map((lookup, index) => ({
           ...lookup.input,
           id: `l${index}`,
         }));
@@ -410,11 +492,11 @@ export class JobEngine {
             retryable: true,
             kind: "network" as const,
           };
-          await this.handleClientFailure(jobId, pending, failure);
+          await this.handleClientFailure(jobId, preparedLookups, failure);
           return;
         }
 
-        const outcome = await this.applyResponse(jobId, pending, response);
+        const outcome = await this.applyResponse(jobId, preparedLookups, response);
         if (outcome.pause) {
           await this.pauseJob(jobId, outcome.pause.reason, outcome.pause.message, {
             code: outcome.pause.code,
@@ -480,6 +562,13 @@ export class JobEngine {
       "System",
     );
     this.logger("job_completed", { rows: stats.total });
+  }
+
+  private async setAiNote(jobId: string, note: string | null): Promise<void> {
+    const job = await this.repository.getJob(jobId);
+    if (!job || job.state === "cancelled") return;
+    if ((job.aiNote ?? null) === note) return;
+    await this.repository.putJob({ ...job, aiNote: note, updatedAt: this.nowIso() });
   }
 
   private async pauseJob(
@@ -703,7 +792,7 @@ export class JobEngine {
       }
 
       try {
-        const evaluation = evaluateLookup(lookup.input, result.results, {
+        const evaluation = evaluateLookupFor(lookup.input, result.results, {
           provider: response.provider,
           checkedAt: now,
         });
@@ -947,24 +1036,39 @@ export class JobEngine {
     }
 
     const merged: RawRow = { ...row.raw };
-    const fields: Array<[keyof RawRow, number]> = [
-      ["country", 120],
-      ["region", 120],
-      ["city", 120],
-      ["officialDomain", 253],
-      ["officialWebsite", 400],
-      ["alias", 120],
-      ["notes", 500],
-    ];
+    const fields: Array<[string, number]> =
+      row.raw.kind === "person"
+        ? [
+            ["company", 200],
+            ["jobTitle", 200],
+            ["location", 200],
+            ["email", 254],
+            ["phone", 40],
+            ["notes", 500],
+          ]
+        : [
+            ["country", 120],
+            ["region", 120],
+            ["city", 120],
+            ["officialDomain", 253],
+            ["officialWebsite", 400],
+            ["alias", 120],
+            ["notes", 500],
+          ];
+    const mergedRecord = merged as Record<string, unknown>;
+    const contextRecord = context as Record<string, unknown>;
     for (const [field, max] of fields) {
-      if (!(field in context)) continue;
-      const value = cleanOptional(context[field], max);
-      if (value) merged[field] = value;
-      else delete merged[field];
+      if (!(field in contextRecord)) continue;
+      const value = cleanOptional(contextRecord[field], max);
+      if (field === "email" && value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+        throw new EngineError("invalid_rows", "Email addresses must look like name@example.com.");
+      }
+      if (value) mergedRecord[field] = value;
+      else delete mergedRecord[field];
     }
 
     const now = this.nowIso();
-    const newKey = computeLookupKey(merged);
+    const newKey = computeLookupKeyFor(merged);
     let updatedRow: ResultRow;
 
     if (newKey === row.lookupKey) {

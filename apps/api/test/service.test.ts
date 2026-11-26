@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { FIXTURE_TIME, fixtureResultsFor } from "@clf/fixtures";
-import type { RawSearchResult, SearchRequest, SearchResponse } from "@clf/matching";
+import { FIXTURE_TIME, fixtureResultsFor, personFixtureResultsFor } from "@clf/fixtures";
+import type { ApiLookup, RawSearchResult, SearchRequest, SearchResponse } from "@clf/matching";
 import { IdempotencyCache } from "../src/cache.js";
 import { silentLogger } from "./helpers.js";
 import type { SearchContext, SearchProvider } from "../src/providers/types.js";
@@ -63,10 +63,7 @@ function harness(
   return { service, provider, clock, sleeps };
 }
 
-function request(
-  lookups: Array<{ id: string; companyName: string }>,
-  key = "idem-key-123456",
-): SearchRequest {
+function request(lookups: ApiLookup[], key = "idem-key-123456"): SearchRequest {
   return { schemaVersion: 1, idempotencyKey: key, lookups };
 }
 
@@ -86,6 +83,32 @@ describe("ResolverService", () => {
     expect(response.results[0]?.errors).toEqual([]);
     expect(response.results[0]?.results[0]?.provider).toBe("fixture");
     expect(provider.calls).toHaveLength(2);
+  });
+
+  it("plans person-profile queries and returns /in/ evidence", async () => {
+    const provider = new FakeProvider(async (query, context) =>
+      personFixtureResultsFor("Ada Lovelace", query, context.shape, context.retrievedAt),
+    );
+    const { service } = harness(provider);
+    const response = await service.resolve(
+      request([
+        {
+          id: "p1",
+          kind: "person",
+          fullName: "Ada Lovelace",
+          company: "Analytical Engines",
+          jobTitle: "Mathematician",
+          location: "London",
+        },
+      ]),
+      "fp-person",
+    );
+    const queryShapes = response.results[0]?.queries.map((query) => query.shape);
+    expect(queryShapes).toEqual(expect.arrayContaining(["primary", "company", "title"]));
+    expect(response.results[0]?.queries.every((query) => query.query.includes("site:linkedin.com/in/"))).toBe(
+      true,
+    );
+    expect(response.results[0]?.results[0]?.originalUrl).toContain("linkedin.com/in/ada-lovelace");
   });
 
   it("stops the batch on a provider rate limit and does not cache the failure", async () => {

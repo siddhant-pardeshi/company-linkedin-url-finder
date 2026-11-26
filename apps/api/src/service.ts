@@ -1,5 +1,5 @@
 import {
-  planQueries,
+  planQueriesFor,
   SEARCH_SCHEMA_VERSION,
   type LookupSearchResult,
   type PlannedQuery,
@@ -124,7 +124,7 @@ export class ResolverService {
     for (const lookup of request.lookups) {
       let queries: PlannedQuery[];
       try {
-        queries = planQueries(lookup);
+        queries = planQueriesFor(lookup);
       } catch {
         results.push({
           id: lookup.id,

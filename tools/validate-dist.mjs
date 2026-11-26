@@ -73,6 +73,17 @@ async function main() {
     );
   }
 
+  const optionalHosts = manifest.optional_host_permissions ?? [];
+  const allowedOptionalHosts = new Set([
+    "https://generativelanguage.googleapis.com/*",
+    "https://api.x.ai/*",
+    "https://openrouter.ai/*",
+  ]);
+  check(optionalHosts.length <= 3, "unexpected number of optional host permissions");
+  for (const host of optionalHosts) {
+    check(allowedOptionalHosts.has(host), `unexpected optional host permission: ${host}`);
+  }
+
   check(!manifest.content_scripts, "content scripts are not part of this extension");
   check(!manifest.web_accessible_resources, "web accessible resources are not needed");
 

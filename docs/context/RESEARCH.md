@@ -26,6 +26,19 @@ Checked on **2026-11-26** before implementation. Only official vendor documentat
 
 The provider adapter is replaceable. Terms, pricing, quotas, and data-processing terms must be re-checked by the operator before public distribution.
 
+## AI query-assist providers (optional BYOK)
+
+- Gemini `models.generateContent`: <https://ai.google.dev/api/generate-content>
+  - Endpoint: `POST https://generativelanguage.googleapis.com/v1beta/{model=models/*}:generateContent`.
+  - Implemented with `x-goog-api-key`, `contents[].parts[].text`, and `generationConfig.responseMimeType="application/json"`.
+  - Current model catalogue (checked 2026-11-26): <https://ai.google.dev/gemini-api/docs/models>. Default is editable; the app ships `gemini-3.5-flash-lite`, which the catalogue lists as the cost-efficient current Flash-Lite model. Gemini 2.5 models are documented as restricted/deprecated for new projects.
+- xAI chat completions: <https://docs.x.ai/docs/api-reference>
+  - Endpoint: `POST https://api.x.ai/v1/chat/completions`; `Authorization: Bearer …`; response `choices[0].message.content`. Default editable model `grok-4.5` per the reference example. Confirm plan/pricing.
+- OpenRouter: <https://openrouter.ai/docs/quickstart>
+  - OpenAI-compatible chat completions at `https://openrouter.ai/api/v1/chat/completions`; `Authorization: Bearer …`; model slugs are user-editable. Default `openrouter/auto`; free model slugs are available per OpenRouter’s catalogue.
+
+AI output is treated as untrusted query text only: each query must start with `site:linkedin.com/in/`, contain the exact person name, contain no URL, and avoid smuggling a profile slug into the site restriction. The extension validates it and the resolver validates it again. AI keys are stored in `chrome.storage.local` and the three provider hosts are optional permissions, not install-time permissions.
+
 ## LinkedIn boundaries
 
 - LinkedIn User Agreement: <https://www.linkedin.com/legal/user-agreement>

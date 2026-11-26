@@ -114,6 +114,58 @@
         </form>
       </section>
 
+      <section class="panel" aria-labelledby="ai-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Optional</p>
+            <h2 id="ai-heading">AI query assist</h2>
+            <p class="muted">
+              Uses your own key to suggest extra LinkedIn profile search angles. It never chooses a URL.
+            </p>
+          </div>
+          <span id="ai-state" class="chip chip--quiet">Off</span>
+        </div>
+        <p class="prose">
+          When enabled, the extension sends only the person name, company, job title, and location to your chosen AI
+          provider. Email and phone are never sent. The AI returns site-restricted search queries; the provider evidence
+          and deterministic rules still decide the URL, and weak or competing results go to review.
+        </p>
+        <form id="ai-form" novalidate>
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Provider</span>
+              <select class="select" id="ai-provider">
+                <option value="gemini">Google Gemini</option>
+                <option value="xai">xAI Grok</option>
+                <option value="openrouter">OpenRouter</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Model</span>
+              <input class="input" id="ai-model" spellcheck="false" />
+            </label>
+          </div>
+          <label class="field" for="ai-key">
+            <span class="label">API key (stored locally)</span>
+            <input class="input" id="ai-key" type="password" autocomplete="off" spellcheck="false" />
+            <span class="hint">
+              Anyone with access to this browser profile can read a locally stored key. Use a dedicated profile and
+              rotate or delete the key if it is exposed. It is never included in exports or resolver logs.
+            </span>
+          </label>
+          <label class="checkbox-row" for="ai-enabled">
+            <input type="checkbox" id="ai-enabled" />
+            <span>Enable AI query assist for people batches</span>
+          </label>
+          <p class="hint" id="ai-note"></p>
+          <div class="row">
+            <button class="button button--primary" id="ai-save" type="submit">Save AI settings</button>
+            <button class="button button--ghost" id="ai-test" type="button">Test AI connection</button>
+            <span class="hint" id="ai-status" role="status"></span>
+          </div>
+        </form>
+      </section>
+
       <section class="panel" aria-labelledby="privacy-heading">
         <div class="section-head">
           <div>
@@ -123,9 +175,11 @@
         </div>
         <div class="prose">
           <p>
-            Company names and the optional disambiguation fields you provide are sent to your configured resolver, which
-            forwards conservative search queries to a licensed search provider. Results and evidence are stored in this
-            browser’s IndexedDB. No analytics, telemetry, LinkedIn credentials, or browsing history are collected.
+            Company or person names and the optional disambiguation fields you provide are sent to your configured
+            resolver, which forwards conservative search queries to a licensed search provider. If AI query assist is
+            enabled, only the person name, company, job title, and location are sent to your chosen AI provider; email
+            and phone are never sent. Results and evidence are stored in this browser’s IndexedDB. No analytics,
+            telemetry, LinkedIn credentials, or browsing history are collected.
           </p>
           <p>
             The resolver reference implementation does not persist lookups; it keeps a short-lived in-memory idempotency
@@ -136,7 +190,9 @@
         <div class="danger-zone">
           <div>
             <strong>Delete all local data</strong>
-            <p class="hint">Removes every batch, result, evidence record, audit entry, and the saved token.</p>
+            <p class="hint">
+              Removes every batch, result, evidence record, audit entry, the saved resolver token, and the AI API key.
+            </p>
           </div>
           <button class="button button--danger" id="clear-data" type="button">Delete data</button>
         </div>
@@ -183,8 +239,9 @@
 
       <footer class="legal">
         <p>
-          Not affiliated with LinkedIn, Microsoft, Google, or Brave. This tool finds evidence-backed public URL
-          candidates; it does not scrape LinkedIn and cannot guarantee that every company name is unambiguous.
+          Not affiliated with LinkedIn, Microsoft, Google, xAI, OpenRouter, or Brave. This tool finds evidence-backed
+          public URL candidates; it does not scrape LinkedIn and cannot guarantee that every company or person name is
+          unambiguous.
         </p>
       </footer>
     </main>
@@ -192,8 +249,8 @@
     <dialog id="confirm-dialog" class="dialog dialog--small" aria-labelledby="confirm-title">
       <h2 id="confirm-title">Delete all local data?</h2>
       <p id="confirm-message">
-        This removes every batch, result, evidence record, audit entry, and the saved access token from this browser. It
-        cannot be undone.
+        This removes every batch, result, evidence record, audit entry, the saved resolver token, and the AI API key
+        from this browser. It cannot be undone.
       </p>
       <div class="dialog__foot">
         <button class="button button--ghost" id="confirm-cancel" type="button">Cancel</button>

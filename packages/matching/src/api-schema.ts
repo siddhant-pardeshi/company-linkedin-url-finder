@@ -15,6 +15,7 @@ import {
   type SearchRequest,
   type SearchResponse,
 } from "./types.js";
+import { normalizePersonName, sanitizePersonExtraQuery } from "./person.js";
 
 export { MAX_API_BODY_BYTES };
 
@@ -34,7 +35,17 @@ export class ApiSchemaError extends Error {
   }
 }
 
-const QUERY_SHAPES: ReadonlySet<string> = new Set(["primary", "domain", "country", "alias", "reshaped"]);
+const QUERY_SHAPES: ReadonlySet<string> = new Set([
+  "primary",
+  "company",
+  "domain",
+  "country",
+  "alias",
+  "title",
+  "location",
+  "ai",
+  "reshaped",
+]);
 const ERROR_CODES: ReadonlySet<string> = new Set([
   "provider_not_configured",
   "provider_auth_failed",
@@ -117,8 +128,59 @@ function arrayValue(value: unknown, path: string, issues: string[]): unknown[] {
 function parseLookup(value: unknown, index: number, issues: string[]): ApiLookup {
   const path = `lookups[${index}]`;
   const source = record(value, path, issues);
+  const id = text(source["id"], `${path}.id`, issues, { min: 1, max: 100 });
+  const kind = source["kind"];
+
+  if (kind !== undefined && kind !== "company" && kind !== "person") {
+    issues.push(`${path}.kind must be "company" or "person"`);
+  }
+
+  if (kind === "person") {
+    const fullName = text(source["fullName"], `${path}.fullName`, issues, {
+      min: 1,
+      max: MAX_COMPANY_NAME_LENGTH,
+    });
+    const normalized = normalizePersonName(fullName);
+    const person: ApiLookup = { id, kind: "person", fullName };
+    const company = optionalText(source, "company", path, issues, 200);
+    const jobTitle = optionalText(source, "jobTitle", path, issues, 200);
+    const location = optionalText(source, "location", path, issues, 200);
+    const email = optionalText(source, "email", path, issues, 254);
+    const phone = optionalText(source, "phone", path, issues, 40);
+    const notes = optionalText(source, "notes", path, issues, 500);
+    if (company) person.company = company;
+    if (jobTitle) person.jobTitle = jobTitle;
+    if (location) person.location = location;
+    if (email) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        issues.push(`${path}.email is not a valid email address`);
+      else person.email = email;
+    }
+    if (phone) person.phone = phone;
+    if (notes) person.notes = notes;
+
+    const extraRaw = source["extraQueries"];
+    const extraQueries = extraRaw === undefined ? [] : arrayValue(extraRaw, `${path}.extraQueries`, issues);
+    if (extraQueries.length > 2) issues.push(`${path}.extraQueries must contain at most 2 items`);
+    const accepted: string[] = [];
+    for (const [queryIndex, queryValue] of extraQueries.slice(0, 2).entries()) {
+      const query = text(queryValue, `${path}.extraQueries[${queryIndex}]`, issues, { min: 10, max: 400 });
+      const cleaned = sanitizePersonExtraQuery(query, normalized);
+      if (!cleaned) {
+        issues.push(
+          `${path}.extraQueries[${queryIndex}] must be a site:linkedin.com/in/ query containing the person name and no URL`,
+        );
+      } else {
+        accepted.push(cleaned);
+      }
+    }
+    if (accepted.length > 0) person.extraQueries = accepted;
+    return person;
+  }
+
   const lookup: ApiLookup = {
-    id: text(source["id"], `${path}.id`, issues, { min: 1, max: 100 }),
+    id,
+    kind: "company",
     companyName: text(source["companyName"], `${path}.companyName`, issues, {
       min: 1,
       max: MAX_COMPANY_NAME_LENGTH,

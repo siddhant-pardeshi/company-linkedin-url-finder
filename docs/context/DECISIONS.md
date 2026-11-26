@@ -68,6 +68,22 @@ Accepting an **excluded** candidate is possible only through an “Accept anyway
 
 `storage`, `alarms`, `downloads`, and one build-time resolver host. No content scripts, `tabs`, `activeTab`, `scripting`, `<all_urls>`, or LinkedIn host. All JS is bundled; CSP restricts scripts to self. The endpoint is baked at build time so the manifest can stay narrow.
 
+### 11. Person mode reuses the evidence engine, not a second pipeline
+
+**Decision:** add `/in/<slug>` URL validation, person-name normalization/title extraction, a person query planner, and a person evaluator in the same pure matching package. The job engine persists one mode per batch and dispatches evaluation by kind.
+
+**Why:** resume, dedupe, review, audit, and exports stay identical. A second pipeline would duplicate state and drift.
+
+**Rule:** people auto-match only with an exact name and a supplied company/title/location in the evidence; a name-only person batch is review-only. This is stricter than company matching on purpose because person names are rarely unique.
+
+### 12. BYOK AI is query assistance, never URL generation
+
+**Decision:** support Gemini, xAI Grok, and OpenRouter with keys pasted into Settings and stored locally. AI proposes at most two `site:linkedin.com/in/` queries per batch. The extension and resolver validate that each query contains the exact person name, starts with the profile-site restriction, and contains no URL/profile slug. AI failure sets a visible batch note and falls back to deterministic queries.
+
+**Why:** the user asked for free/paid AI provider flexibility without weakening the accuracy contract. AI can improve recall for name/company variants, but an LLM must not invent or rank a URL.
+
+**Trade-off:** keys in `chrome.storage.local` are readable by anyone with profile access; this is disclosed in Settings and PRIVACY. AI provider hosts are optional permissions, so the default install surface stays three API permissions plus one resolver host.
+
 ## Deviations / notes
 
 - Store ZIPs are **unconfigured QA artifacts** because no resolver deployment or owner-provided origin exists. `tools/package-extension.mjs` refuses to create store-ready packages with `resolver.example.com`.

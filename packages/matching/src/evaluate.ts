@@ -42,9 +42,13 @@ import type {
 const SHAPE_PRIORITY: Record<QueryShape, number> = {
   primary: 0,
   alias: 1,
-  domain: 2,
-  country: 3,
-  reshaped: 4,
+  company: 2,
+  domain: 3,
+  country: 4,
+  title: 5,
+  location: 6,
+  ai: 7,
+  reshaped: 8,
 };
 
 const MAX_EXCLUDED_RESULTS = 25;
@@ -294,6 +298,7 @@ export function evaluateLookup(
   };
 
   const base = {
+    kind: "company" as const,
     lookupKey: computeLookupKey(input),
     normalizedName: name.core,
     provider: meta.provider,

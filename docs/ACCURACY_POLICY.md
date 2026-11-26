@@ -19,7 +19,7 @@ Only `http:` or `https:` URLs are considered.
 
 Accepted host: exactly `linkedin.com`, or a hostname ending in `.linkedin.com` (locale subdomains such as `uk.linkedin.com` are allowed).
 
-Accepted path: exactly
+Company mode accepts exactly
 
 ```text
 /company/<slug>
@@ -143,12 +143,45 @@ In these cases the tool returns review or not-found. That is the intended direct
 - Provider rate limits and terms change. The resolver surfaces 429/5xx and pauses instead of evading limits.
 - Client/server clock skew affects displayed timestamps, not decisions.
 
-## 9. Invariants enforced by tests
+## 9. Person profile rules
 
-- No test and no production branch constructs a LinkedIn URL from a company name.
+People mode uses the same evidence-first contract with a stricter ambiguity rule.
+
+**URL acceptance.** The host rules are identical. The path must be exactly `/in/<slug>` with an optional trailing slash; the same slug length/character rules apply. `/company/`, `/pub/`, `/in/<slug>/details/...`, lookalike hosts, encoded separators, and query-only URLs are rejected. The canonical form is `https://www.linkedin.com/in/<discovered-slug>/`, built only from a discovered URL.
+
+**Name matching.** The provider title is reduced to its profile-name portion (`Name - Title - Company | LinkedIn` → `Name`; credential suffixes such as `, PhD` are removed for comparison). `Last, First` is normalized to `First Last`. The normalized name must equal the input full name exactly; prefixes, fuzzy matches, and different middle names do not auto-select.
+
+**Queries.** The planner can issue `site:linkedin.com/in/` queries with the exact name plus company, job title, and location, plus a reshaped corroboration query and up to two validated AI extra queries. The cap is five queries per person.
+
+**Automatic match.** A profile auto-matches only when:
+
+1. exactly one candidate has an exact normalized name match;
+2. no second exact-name candidate exists;
+3. the name has at least two tokens; and
+4. at least one supplied fact — company, job title, or location — appears in the provider title/snippet.
+
+A name-only input therefore never auto-matches, and two people with the same exact name always go to `REVIEW_REQUIRED`. Email and phone are local export metadata: they are not used in queries, sent to the search provider, or sent to an AI provider.
+
+**Human review.** The same accept/reject audit rules apply. A human can accept a provider-returned profile candidate; that is recorded as `USER_CONFIRMED`, never as an automatic match.
+
+## 10. AI query assist
+
+AI is optional and outside the matching decision.
+
+- The user supplies a Gemini, xAI, or OpenRouter key, stored in `chrome.storage.local`; it is sent only to that provider.
+- Up to two AI-proposed queries per batch are accepted for a person only if they start with `site:linkedin.com/in/`, contain the exact person name, contain no URL, and do not smuggle a slug into the site restriction. Validation runs in the extension and again in the resolver.
+- Only person name, company, job title, and location are sent to the AI provider. Email and phone are never sent.
+- The AI never returns, ranks, or selects a URL. Its queries become additional search evidence; exact-name and corroboration rules still decide.
+- If the AI request fails, the job records a visible AI note and continues with deterministic queries. AI failure never changes a status to `MATCHED`.
+- Keys are visible to anyone with access to the browser profile. Use a dedicated profile and rotate exposed keys.
+
+## 11. Invariants enforced by tests
+
+- No test and no production branch constructs a LinkedIn URL from a company or person name.
 - A selected URL is always derived from a candidate discovered in provider results.
 - Two exact candidates never auto-select.
-- A profile/job/school/lookalike URL never becomes a candidate.
+- A job, school, company-in-person-mode, person-in-company-mode, or lookalike URL never becomes a candidate.
+- AI queries that contain profile URLs, omit the exact name, or use the wrong site restriction are rejected.
 - A provider error never becomes a match.
 - Exports preserve every original row, including errors and not-found rows.
 - Human decisions are audit-logged with actor and time.

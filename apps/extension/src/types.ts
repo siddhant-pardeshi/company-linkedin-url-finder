@@ -2,7 +2,7 @@ import type {
   AuditEntry,
   CandidateEvaluation,
   Evaluation,
-  LookupContext,
+  LookupInput,
   PlannedQuery,
   RowStatus,
 } from "@clf/matching";
@@ -28,7 +28,10 @@ export const MAX_ROWS_PER_JOB = 5000;
 export const MAX_BATCH_SIZE = 10;
 export const DEFAULT_BATCH_SIZE = 5;
 
-export type RawRow = LookupContext & { companyName: string };
+import type { AiSettings } from "./ai/settings.js";
+
+export type RawRow = LookupInput;
+export type RowKind = "company" | "person";
 
 export type RowError = {
   code: string;
@@ -62,6 +65,7 @@ export type Job = {
   createdAt: string;
   updatedAt: string;
   state: JobState;
+  mode?: RowKind;
   totalRows: number;
   totalLookups: number;
   batchSize: number;
@@ -69,6 +73,8 @@ export type Job = {
   pauseReason: PauseReason | null;
   lastError: { code: string; message: string; retryable: boolean; at: string } | null;
   cooldownUntil: string | null;
+  /** Safe, user-facing note when optional AI query assistance failed. */
+  aiNote?: string | null;
   startedAt: string | null;
   finishedAt: string | null;
 };
@@ -77,6 +83,7 @@ export type ResultRow = {
   id: string;
   jobId: string;
   rowIndex: number;
+  kind?: RowKind;
   raw: RawRow;
   /** Normalized de-duplication key; rows sharing it share one lookup. */
   lookupKey: string;
@@ -158,6 +165,9 @@ export type ExtensionRequest =
   | { type: "settings:get" }
   | { type: "settings:save"; patch: Partial<AppSettings> }
   | { type: "settings:test" }
+  | { type: "ai:get" }
+  | { type: "ai:save"; patch: Partial<AiSettings> }
+  | { type: "ai:test" }
   | { type: "data:clear-all" }
   | { type: "app:info" };
 

@@ -43,6 +43,35 @@ describe("resolver HTTP server", () => {
     }
   });
 
+  it("resolves a person batch through the same evidence contract", async () => {
+    const srv = await startTestServer(testConfig());
+    try {
+      const response = await postJson(srv.url, {
+        schemaVersion: 1,
+        idempotencyKey: "batch-key-person-01",
+        lookups: [
+          {
+            id: "p1",
+            kind: "person",
+            fullName: "Ada Lovelace",
+            company: "Analytical Engines",
+            jobTitle: "Mathematician",
+            location: "London",
+          },
+        ],
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as SearchResponse;
+      expect(body.results[0]?.queries.some((query) => query.query.includes("site:linkedin.com/in/"))).toBe(
+        true,
+      );
+      expect(body.results[0]?.results[0]?.originalUrl).toContain("linkedin.com/in/ada-lovelace");
+      expect(body.results[0]?.errors).toEqual([]);
+    } finally {
+      await srv.close();
+    }
+  });
+
   it("replays an idempotent request from cache", async () => {
     const srv = await startTestServer(testConfig());
     try {
