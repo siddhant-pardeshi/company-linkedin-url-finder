@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Company Page Finder — Settings</title>
+    <link rel="icon" href="icons/icon-32.png" />
+    <link rel="stylesheet" href="styles/base.css" />
+    <link rel="stylesheet" href="styles/options.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="appbar">
+      <div class="appbar__brand">
+        <img src="icons/icon-48.png" alt="" width="36" height="36" />
+        <span class="appbar__text">
+          <strong>Company Page Finder</strong>
+          <small>Settings &amp; privacy</small>
+        </span>
+      </div>
+      <div class="appbar__actions">
+        <a class="button button--ghost" href="workspace.html">Open workspace</a>
+      </div>
+    </header>
+
+    <main id="main" class="shell shell--narrow">
+      <section class="page-head">
+        <p class="eyebrow">Configuration</p>
+        <h1>Settings</h1>
+        <p class="lede">
+          The resolver endpoint is fixed at build time so the extension can keep a narrow host permission. Your access
+          token stays in this browser profile and is sent only to that endpoint.
+        </p>
+      </section>
+
+      <div id="settings-banner" class="banner" hidden role="status"></div>
+
+      <section class="panel" aria-labelledby="connection-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Resolver</p>
+            <h2 id="connection-heading">Connection</h2>
+            <p class="muted">The resolver holds the search-provider key; the extension never does.</p>
+          </div>
+          <span id="connection-state" class="chip chip--quiet">Not tested</span>
+        </div>
+
+        <div class="field">
+          <span class="label">Resolver endpoint</span>
+          <code class="endpoint" id="endpoint-value">Loading…</code>
+        </div>
+
+        <form id="token-form" novalidate>
+          <label class="field">
+            <span class="label">Access token</span>
+            <input
+              class="input"
+              id="token-input"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Paste the token provisioned by the resolver operator"
+            />
+            <span class="hint" id="token-hint">Stored locally. Never placed in exports or logs.</span>
+          </label>
+          <div class="row">
+            <button class="button button--primary" id="save-token" type="submit">Save</button>
+            <button class="button button--ghost" id="test-connection" type="button">Save &amp; test</button>
+            <a class="link" href="workspace.html">Back to workspace</a>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="defaults-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Batch behavior</p>
+            <h2 id="defaults-heading">Defaults</h2>
+          </div>
+        </div>
+        <form id="defaults-form" novalidate>
+          <div class="grid-2">
+            <label class="field">
+              <span class="label">Audit operator name</span>
+              <input class="input" id="operator-input" maxlength="60" autocomplete="name" />
+              <span class="hint">Recorded when you accept or reject a candidate.</span>
+            </label>
+            <label class="field">
+              <span class="label">Lookups per request</span>
+              <select class="select" id="batch-input">
+                <option value="1">1 — slowest, most conservative</option>
+                <option value="3">3</option>
+                <option value="5">5 — recommended</option>
+                <option value="10">10 — fastest</option>
+              </select>
+            </label>
+            <label class="field">
+              <span class="label">Keep finished batches for</span>
+              <select class="select" id="retention-input">
+                <option value="0">Until I clear them</option>
+                <option value="7">7 days</option>
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+                <option value="365">1 year</option>
+              </select>
+            </label>
+          </div>
+          <div class="row">
+            <button class="button button--primary" id="save-defaults" type="submit">Save defaults</button>
+            <span class="hint" id="defaults-status" role="status"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel" aria-labelledby="privacy-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Data handling</p>
+            <h2 id="privacy-heading">Privacy &amp; local data</h2>
+          </div>
+        </div>
+        <div class="prose">
+          <p>
+            Company names and the optional disambiguation fields you provide are sent to your configured resolver, which
+            forwards conservative search queries to a licensed search provider. Results and evidence are stored in this
+            browser’s IndexedDB. No analytics, telemetry, LinkedIn credentials, or browsing history are collected.
+          </p>
+          <p>
+            The resolver reference implementation does not persist lookups; it keeps a short-lived in-memory idempotency
+            cache and writes operational logs without company names or query text. Confirm your own deployment’s
+            retention and the provider’s current terms before production use.
+          </p>
+        </div>
+        <div class="danger-zone">
+          <div>
+            <strong>Delete all local data</strong>
+            <p class="hint">Removes every batch, result, evidence record, audit entry, and the saved token.</p>
+          </div>
+          <button class="button button--danger" id="clear-data" type="button">Delete data</button>
+        </div>
+      </section>
+
+      <section class="panel" aria-labelledby="about-heading">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">Build</p>
+            <h2 id="about-heading">About</h2>
+          </div>
+        </div>
+        <dl class="details">
+          <div>
+            <dt>Version</dt>
+            <dd id="about-version">—</dd>
+          </div>
+          <div>
+            <dt>Build</dt>
+            <dd id="about-build">—</dd>
+          </div>
+          <div>
+            <dt>Commit</dt>
+            <dd id="about-commit">—</dd>
+          </div>
+          <div>
+            <dt>Built at</dt>
+            <dd id="about-time">—</dd>
+          </div>
+          <div>
+            <dt>Endpoint</dt>
+            <dd id="about-endpoint">—</dd>
+          </div>
+          <div>
+            <dt>Permissions</dt>
+            <dd>storage, downloads, alarms; one resolver host</dd>
+          </div>
+        </dl>
+        <p class="hint">
+          No remotely hosted code. The extension bundles all executable JavaScript at build time. The resolver adapter
+          is replaceable; Brave Web Search is the reference provider.
+        </p>
+      </section>
+
+      <footer class="legal">
+        <p>
+          Not affiliated with LinkedIn, Microsoft, Google, or Brave. This tool finds evidence-backed public URL
+          candidates; it does not scrape LinkedIn and cannot guarantee that every company name is unambiguous.
+        </p>
+      </footer>
+    </main>
+
+    <dialog id="confirm-dialog" class="dialog dialog--small" aria-labelledby="confirm-title">
+      <h2 id="confirm-title">Delete all local data?</h2>
+      <p id="confirm-message">
+        This removes every batch, result, evidence record, audit entry, and the saved access token from this browser. It
+        cannot be undone.
+      </p>
+      <div class="dialog__foot">
+        <button class="button button--ghost" id="confirm-cancel" type="button">Cancel</button>
+        <button class="button button--danger" id="confirm-ok" type="button">Delete everything</button>
+      </div>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script type="module" src="js/options.js"></script>
+  </body>
+</html>

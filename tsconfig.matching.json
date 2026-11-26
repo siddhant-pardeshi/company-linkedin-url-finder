@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": []
+  },
+  "include": [
+    "packages/matching/src/**/*.ts",
+    "packages/matching/test/**/*.ts",
+    "packages/test-fixtures/src/**/*.ts"
+  ]
+}

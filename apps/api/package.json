@@ -1,0 +1,11 @@
+{
+  "name": "@clf/api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "HTTPS search-resolver API that holds the licensed search-provider credential.",
+  "main": "dist/server.js",
+  "scripts": {
+    "start": "node dist/server.js"
+  }
+}

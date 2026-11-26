@@ -1,0 +1,13 @@
+node_modules
+dist
+coverage
+.cache
+.zwork
+.git
+.github
+docs
+apps/extension
+*.zip
+*.log
+.env
+.env.*

@@ -1,0 +1,13 @@
+{
+  "name": "@clf/fixtures",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sanitized fake search-provider responses used by tests and local demos.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@clf/matching": "*"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "name": "company-page-finder",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Evidence-first bulk finder for LinkedIn company page URLs. Chrome/Edge Manifest V3 extension plus a small resolver service.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.matching.json && tsc -p tsconfig.api.json && tsc -p tsconfig.extension.json",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "build:api": "node tools/build-api.mjs",
+    "build": "node tools/build-extension.mjs",
+    "build:dev": "node tools/build-extension.mjs --dev",
+    "package": "node tools/package-extension.mjs",
+    "validate:dist": "node tools/validate-dist.mjs",
+    "e2e": "node tools/e2e-smoke.mjs",
+    "api:start": "node tools/build-api.mjs && node dist/api/server.js",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build && npm run build:api && npm run validate:dist"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.4",
+    "@types/node": "^24.0.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "esbuild": "^0.25.6",
+    "eslint": "^9.30.0",
+    "fake-indexeddb": "^6.2.8",
+    "globals": "^16.3.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.35.0",
+    "vitest": "^3.2.4"
+  }
+}

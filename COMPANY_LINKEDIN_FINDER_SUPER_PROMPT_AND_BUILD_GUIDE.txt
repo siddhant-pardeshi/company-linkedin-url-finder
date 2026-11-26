@@ -1,0 +1,468 @@
+COMPANY LINKEDIN FINDER
+Super Prompt and Build / GitHub Publication Guide
+Prepared for Autoclaw, Z.ai, or another autonomous coding agent
+
+IMPORTANT INTERPRETATION
+"Microsoft Bing extension" is interpreted here as a Microsoft Edge browser extension.
+Build one Chromium Manifest V3 extension that runs in both Google Chrome and Microsoft
+Edge. Do not build a Bing web-site extension and do not depend on the retired Bing Web
+Search API.
+
+ACCURACY AND COMPLIANCE CONTRACT
+The desired outcome is zero invented LinkedIn URLs, not an impossible promise that every
+company name in the world can be resolved with absolute certainty. A company name alone
+can be ambiguous, stale, or shared by several businesses. The product must therefore be
+precision-first:
+
+* Never fabricate, guess, or derive a LinkedIn URL or company slug from a company name.
+* Only display a selected URL when it was returned verbatim by a licensed search provider,
+  passed strict URL validation, and has sufficient deterministic evidence.
+* Return REVIEW_REQUIRED, NOT_FOUND, or ERROR instead of a plausible-looking wrong URL.
+* Never use an LLM to generate, infer, select, or rank a URL. An LLM must not be part of
+  the matching path. Use transparent deterministic rules only.
+* Never scrape, parse, automate, log in to, or send browser automation to LinkedIn. Do not
+  use LinkedIn cookies, content scripts, CAPTCHA solving, IP rotation, access-control
+  bypasses, or unapproved LinkedIn APIs. Do not request any linkedin.com host permission.
+* Before public distribution, verify the current terms of the chosen search provider and
+  obtain an appropriate legal/privacy review for the intended use. The app finds
+  evidence-backed public URL candidates; it is not a LinkedIn scraper.
+
+The product must describe this limitation honestly in its UI and README. A high-confidence
+result is evidence-backed, not a claim that LinkedIn has formally certified the match.
+
+================================================================================
+PART 1 — COPY/PASTE SUPER PROMPT FOR THE CODING AGENT
+================================================================================
+
+You are the lead engineer responsible for designing, implementing, testing, documenting,
+and publishing the source code for a production-quality browser extension.
+
+PRODUCT
+Build "Company Page Finder" (working name): a Chromium Manifest V3 extension that works
+in Google Chrome and Microsoft Edge. It accepts a bulk list of company names and returns
+only evidence-backed canonical LinkedIn Company Page URLs. The extension must work from a
+full-page batch workspace, with an optional small toolbar launcher; it must not rely on a
+popup staying open while a batch runs.
+
+Repository destination:
+  https://github.com/siddhant-pardeshi/company-linkedin-url-finder
+
+If that repository does not exist, and the authenticated GitHub account is authorized to
+create repositories for `siddhant-pardeshi`, create it with that exact name. Use public
+visibility unless the owner explicitly asks for private visibility. If GitHub authentication
+or authorization is missing, complete and validate the local repository, then report the
+precise missing action. Never claim that code was pushed or published unless you actually
+verify the remote repository and commit SHA.
+
+FIRST, CHECK CURRENT OFFICIAL DOCUMENTATION
+Before selecting APIs, libraries, deployment settings, or store metadata, verify the latest
+official documentation and terms. Use Manifest V3. Do not use a retired web-search API.
+Use a licensed provider that returns structured organic web-search results. Implement the
+provider through a small server-side adapter. Brave Web Search API is the preferred default
+at the time this brief was written, but make the provider replaceable and confirm its current
+availability and terms before implementation.
+
+Do not store a search-provider secret in the extension package, source tree, Git history,
+build artifact, or public repository. In production, keep it only in the backend secret
+store—not in browser storage. A clearly labelled local-development BYOK option may exist only
+if it is not the default and is documented as unsuitable for public distribution.
+
+NON-NEGOTIABLE MATCHING RULES
+1. A selected URL must originate from a search-provider result. Do not construct
+   `https://www.linkedin.com/company/<guessed-slug>` from the input or any inference.
+2. Parse each candidate with a URL parser. Accept only `http:` or `https:` URLs whose host
+   is exactly `linkedin.com` or ends with `.linkedin.com`, and whose path exactly matches
+   `/company/<non-empty-slug>` with an optional final slash. Reject all other page types.
+3. Reject people profiles (/in/), jobs, schools, groups, posts, events, showcase/life pages,
+   search pages, redirectors, URL shorteners, and any URL with extra path segments after the
+   company slug. Strip a query string and fragment only after the URL passes validation.
+4. Canonicalize an accepted discovered candidate to
+   `https://www.linkedin.com/company/<the-discovered-slug>/`. This is normalization of an
+   already discovered URL, not construction of a guessed URL.
+5. Never load or inspect a LinkedIn page to validate it. Use only the licensed search
+   provider's returned canonical/source URL, title, snippet, query, timestamp, and other
+   contractually permitted metadata.
+6. Use deterministic, explainable matching. Normalize Unicode, case, whitespace,
+   punctuation, and carefully defined legal suffixes on both input and returned title/entity
+   text. Preserve the raw values for audit/export. Do not use generative AI or opaque model
+   scoring for the decision.
+7. Auto-select a URL only when exactly one candidate satisfies all required rules:
+   - a valid discovered LinkedIn `/company/` URL;
+   - an exact normalized company-name match in the provider title/entity text;
+   - no competing plausible candidate for the same input row; and
+   - at least one corroborating signal when the name is short, common, or ambiguous:
+     supplied official domain, supplied country/region, or the same candidate returned by
+     a second independently shaped query.
+8. A fuzzy name score may help order the review list but can NEVER cause automatic selection.
+9. If two candidates are plausible, evidence is weak, the input is too generic, or an error
+   occurs, leave selected_url blank and return a non-positive status. Never silently pick the
+   closest result.
+10. Keep the source query and a concise evidence record for every result so the decision can
+    be reproduced and manually audited.
+
+STATUS MODEL
+Use the following mutually exclusive statuses and make the status visible in the UI/export:
+
+* MATCHED — a URL passed every strict automatic rule. selected_url is present.
+* USER_CONFIRMED — a human explicitly accepted one of the discovered candidates. selected_url
+  is present and the export says it was human-confirmed.
+* REVIEW_REQUIRED — one or more valid candidate URLs exist but the rules cannot safely choose.
+  selected_url is blank; preserve candidates and evidence.
+* NOT_FOUND — the provider completed successfully but returned no candidate that could pass
+  the LinkedIn company URL filter. selected_url is blank.
+* ERROR — provider/network/rate-limit/validation failure after retry policy. selected_url is
+  blank and the error is safe and actionable.
+
+Do not call an automatic outcome "verified" in the UI. Use "High-confidence match" for
+MATCHED and display the evidence. Do not imply LinkedIn affiliation, endorsement, or API
+access. Use a neutral product brand and include a trademark/disclaimer review note.
+
+USER EXPERIENCE
+Build a polished, accessible full-page extension workspace with these capabilities:
+
+1. Input
+   - Paste one company per line.
+   - Import UTF-8 CSV. Support headers: company_name (required), country, region, city,
+     official_domain, official_website, alias, and notes (optional).
+   - Show a small sample CSV and clear validation errors before a batch starts.
+   - Normalize and deduplicate lookups, while preserving every original input row in results
+     and exports.
+   - Let the user edit a row or add an alias/domain/country before retrying it.
+
+2. Batch processing
+   - Process a user-selected batch in one run, with a sensible safe default (for example,
+     up to 100 rows initially). Queue work in small backend batches with conservative,
+     configurable concurrency.
+   - Show total, pending, in-progress, matched, review-required, not-found, and error counts.
+   - Support pause/cancel, retry errors, retry selected rows, and resume after closing and
+     reopening the extension workspace.
+   - Persist job state, source data, evidence, and results locally using extension storage
+     and/or IndexedDB. Design correctly for a Manifest V3 service worker that can stop at
+     any time.
+   - Apply provider-aware exponential backoff with jitter for 429 and transient 5xx/network
+     errors. Obey provider limits. Do not evade rate limits or retry indefinitely.
+
+3. Results and review
+   - Render a sortable/filterable table with: original row number, raw company name,
+     normalized name, country/region, official domain, status, selected URL, deterministic
+     confidence/evidence summary, source/provider, checked-at time, and error/review reason.
+   - Offer a review drawer that lists each candidate's canonical URL, original provider URL,
+     title, snippet, queries, match signals, disqualifying signals, and final rule decision.
+   - Let a user accept or reject only candidates that the provider returned. Record who/when
+     in a local audit entry. Opening a link must be an explicit user action.
+   - Export CSV and JSON. Exports must preserve all original rows, statuses, selected URL
+     (when present), candidates/evidence, timestamps, and errors—not only successful rows.
+
+4. Settings, privacy, and error handling
+   - Provide an options/settings page showing the configured backend endpoint, connection
+     test, privacy explanation, data-retention setting, and version/build information.
+   - Do not collect LinkedIn login credentials or personal profiles. Only process the company
+     inputs and optional disambiguation facts needed for the lookup.
+   - Be specific when an endpoint is absent, authorization fails, the provider quota is
+     exhausted, or a row is ambiguous. Do not turn a failed lookup into a match.
+
+TECHNICAL ARCHITECTURE
+Use current stable TypeScript tooling and a minimal, well-maintained Manifest V3 extension
+build setup. Prefer standards-compatible Chrome extension APIs (`chrome.*`) and test in both
+Chrome and Edge. Avoid browser-specific code unless guarded and documented.
+
+Create a maintainable monorepo or equivalent layout similar to:
+
+  apps/
+    extension/                 # MV3 frontend, full-page workspace, options, service worker
+    api/                       # HTTPS server-side search proxy / resolver
+  packages/
+    matching/                  # pure URL, normalization, query, scoring, schemas
+    test-fixtures/             # sanitized fake provider responses
+  docs/
+    ARCHITECTURE.md
+    ACCURACY_POLICY.md
+    PRIVACY.md
+    ACCEPTABLE_USE.md
+    STORE_SUBMISSION.md
+  .github/workflows/ci.yml
+  README.md
+  SECURITY.md
+  CONTRIBUTING.md
+  LICENSE
+  .env.example
+
+Use an explicit provider interface, for example:
+
+  search(query, context) -> [
+    { originalUrl, title, descriptionOrSnippet, provider, query, retrievedAt }
+  ]
+
+The matching package must be pure and independently testable. It must contain:
+
+* URL candidate parser/canonicalizer;
+* title/name normalizer;
+* legal-suffix configuration and careful alias handling;
+* query planner;
+* deterministic rule evaluator and explanation generator;
+* result schema validation; and
+* no network calls or AI calls.
+
+SEARCH AND RESOLUTION FLOW
+
+  CSV/paste input
+       -> schema validation, normalization, lookup de-duplication
+       -> server-side provider adapter
+       -> candidate filter and canonicalization
+       -> deterministic evidence evaluation
+       -> MATCHED / REVIEW_REQUIRED / NOT_FOUND / ERROR
+       -> persisted table, review, CSV/JSON export
+
+For each lookup, form conservative site-restricted provider queries such as:
+
+  site:linkedin.com/company/ "<exact company name>"
+
+Add supplied facts (such as official domain and country) only as extra constraints. Do not
+claim the search result itself is proof. Use a second differently shaped query for
+disambiguation where appropriate. Query planning must be documented and tested.
+
+BACKEND AND SECRET HANDLING
+Implement a small HTTPS resolver service. It protects the web-search provider key and
+enforces input validation, request-size limits, rate limits, conservative concurrency,
+idempotency/caching, structured logs without secrets, and a narrow API contract. Provide a
+deployable reference implementation and current deployment instructions. A Cloudflare Worker
+or another reputable serverless host is acceptable if its current configuration is verified.
+
+For a public extension, protect the endpoint with real user authentication or a documented
+per-user access-token provisioning flow, quotas, and abuse protection. Do not ship a shared
+static endpoint secret in the extension. For a private, owner-operated deployment, explain
+the trade-offs and require the owner to enter a private access credential locally—never in
+source control or a public build artifact.
+
+The API should accept small batches and return structured candidate/evidence results. Include
+an idempotency key so resuming a batch cannot duplicate work. Do not create a long-running
+server job unless the host supports durable jobs; a client-side checkpointed queue plus small
+idempotent server batches is an acceptable simple first version.
+
+EXTENSION SECURITY AND PERMISSIONS
+Use Manifest V3 and obey its no-remotely-hosted-code rule. Bundle all executable code at build
+time; do not load JavaScript, WASM, or configuration that becomes executable from a CDN.
+Include a restrictive extension-page Content Security Policy.
+
+Request only what is necessary:
+
+* `storage` for local job/settings persistence;
+* `downloads` only if the chosen export implementation truly requires it;
+* one narrowly scoped HTTPS host permission for the configured resolver endpoint.
+
+Do NOT request `<all_urls>`, `tabs`, `activeTab`, `scripting`, webRequest, history,
+clipboardRead, management, or linkedin.com host permission unless a documented, audited,
+essential feature makes it unavoidable. The expected v1 needs none of those. Keep the API
+base URL fixed/configured at build or deployment time so the manifest can remain narrow;
+document a separate local-development manifest if needed.
+
+Never commit `.env`, access tokens, provider keys, private result datasets, user CSV files,
+or production logs. Add robust `.gitignore` rules and secret scanning. Include only dummy
+variables in `.env.example`.
+
+TESTING AND QUALITY GATES
+Do not treat a visual demo as completion. Build all of the following:
+
+* Strict TypeScript compilation, linting, formatting, and package/build validation.
+* Unit tests for URL validation/canonicalization. Cover valid company pages, query fragments,
+  fragments, locale subdomains, malicious lookalike domains, person/job/school/group/post
+  URLs, `/company/slug/life`, redirects, empty slugs, and duplicate candidates.
+* Unit tests for name normalization, legal suffixes, aliases, punctuation, short/common names,
+  country/domain disambiguation, duplicate input rows, and rule explanations.
+* Integration tests using fake provider fixtures. Test successful exact matches, false positive
+  titles, two plausible candidates, zero results, malformed response, 401, 429, 5xx, timeout,
+  retry/backoff, cache/idempotency, and resume state.
+* End-to-end extension tests using mocked provider data. Cover paste, CSV quoting/import,
+  progress, cancel/retry/resume, review accept/reject, filtering, and CSV/JSON export.
+* Manual smoke-test instructions for loading the unpacked build in Chrome and Microsoft Edge.
+
+Required acceptance criteria:
+
+1. A batch of 100 valid rows continues correctly after the workspace is closed and reopened.
+2. No test or production branch creates a LinkedIn URL from a guessed slug.
+3. Every MATCHED record includes a canonical company URL plus retained deterministic evidence.
+4. Ambiguity results in REVIEW_REQUIRED with blank selected_url—not a best guess.
+5. Provider failures remain visible ERROR states and can be retried; they never become matches.
+6. Duplicate inputs use one lookup where possible while every original input row appears in
+   output.
+7. Export preserves successful, unsuccessful, review, and error rows plus evidence.
+8. CI runs install, typecheck, lint, unit tests, integration tests, build, and package
+   validation without production secrets or live provider calls.
+9. Chrome and Edge manually load the packaged extension without unsupported APIs or errors.
+
+DOCUMENTATION AND REPOSITORY DELIVERABLES
+Create a high-quality README with a product screenshot/GIF placeholder, feature summary,
+architecture diagram, local setup, backend setup, configuration, test commands, privacy,
+accuracy limitations, troubleshooting, browser loading instructions, and release steps.
+
+Also include:
+
+* `docs/ACCURACY_POLICY.md`: exact matching rules, status definitions, known false-positive
+  and false-negative limitations, and an explanation that no system can assure universal
+  accuracy from names alone.
+* `docs/PRIVACY.md`: inputs sent to the resolver/provider, where data is stored, retention,
+  deletion, contact/update placeholders, and no LinkedIn credential collection.
+* `docs/ACCEPTABLE_USE.md`: explicit prohibition on LinkedIn scraping/automation and a
+  reminder to follow provider terms.
+* `docs/ARCHITECTURE.md`: diagrams/data flow, schemas, threat model, provider-adapter model,
+  secret handling, and MV3 lifecycle design.
+* `docs/STORE_SUBMISSION.md`: Chrome Web Store and Microsoft Edge Add-ons checklists,
+  privacy disclosures, minimal-permission justifications, assets, package paths, and manual
+  steps required before actual store publication.
+* Store-ready icons and clearly labelled screenshot/listing-copy placeholders. Do not falsely
+  claim affiliation with LinkedIn, Google, Microsoft, Chrome, Edge, or Brave.
+* GitHub Actions that run CI on pull requests and pushes, package reproducible Chrome/Edge
+  ZIP artifacts, and do not expose secrets.
+
+GITHUB AND RELEASE WORKFLOW
+1. Inspect the target repository before making changes. If it is absent and creation is
+   authorized, create it as described above.
+2. Initialize a clean Git history. Make logical commits with clear messages.
+3. Run every documented quality gate and fix failures. Do not skip tests to make CI green.
+4. Push source, docs, CI, and non-secret example config to the verified GitHub remote.
+5. Create a GitHub Release only if the repository/credentials allow it. Attach the tested
+   extension ZIP artifacts and include their SHA-256 hashes. Never say a release exists until
+   it has been verified remotely.
+6. Prepare, but do not submit to the Chrome Web Store or Microsoft Edge Add-ons unless the
+   owner separately supplies developer-account access, final listing assets, privacy-policy
+   URL, disclosures, and explicit authorization. Store submission and review are not implied
+   by pushing to GitHub.
+
+At completion, report:
+
+* exact GitHub repository URL and final commit SHA (only if verified);
+* files created and architectural choices;
+* commands/checks run and their results;
+* test coverage and any remaining known limitations;
+* resolver deployment and credentials that the owner still needs to provide;
+* the exact location and checksum of Chrome/Edge package ZIPs; and
+* confirmation that no secrets, raw user inputs, or scraped LinkedIn data were committed.
+
+Work autonomously, but stop and ask the owner before a decision that changes external cost,
+data retention, public visibility, or store publication. Prefer an explicit review queue over
+a false positive. Never replace missing evidence with a plausible answer.
+
+================================================================================
+PART 2 — IMPLEMENTATION / BUILD GUIDE FOR THE OWNER
+================================================================================
+
+1. Desired product behavior
+
+The extension should resolve many company names in one batch. It should feel like a
+spreadsheet importer, not like a single-name lookup page. The result is deliberately divided
+into confident results and safe non-results:
+
+  MATCHED           High-confidence URL selected from provider evidence.
+  USER_CONFIRMED    User manually accepted a provider-returned candidate.
+  REVIEW_REQUIRED   Candidate(s) exist, but evidence cannot safely distinguish them.
+  NOT_FOUND         No eligible company-page URL was found in a completed search.
+  ERROR             Search/validation/service failure; retry may help.
+
+This is the key design decision that prevents hallucinations. "No fabricated URL" is
+enforceable and testable. "No possible incorrect match ever" is not, especially for inputs
+such as `Acme`, duplicates, rebrands, subsidiaries, or companies with the same legal name.
+Require more input facts—official domain, country, city, alias—when high precision matters.
+
+2. Suggested CSV format
+
+  company_name,country,region,city,official_domain,official_website,alias,notes
+  Microsoft,United States,Washington,Redmond,microsoft.com,https://www.microsoft.com,,
+  Example Private Ltd,India,Maharashtra,Pune,example.in,https://example.in,Example Pvt Ltd,
+
+Only `company_name` is mandatory. More context must improve decision evidence, never cause
+the code to invent a URL.
+
+3. Recommended technical choices
+
+* Browser: one Chromium-compatible Manifest V3 codebase for Chrome and Microsoft Edge.
+* Language: TypeScript with a small maintained extension build tool; use only versions
+  confirmed to support Manifest V3 at implementation time.
+* Frontend: an accessible full-page extension application plus a settings page and minimal
+  toolbar action. A popup alone is not durable enough for bulk work.
+* State: IndexedDB for large jobs/results plus `chrome.storage.local` for settings and small
+  resumable state. Treat the MV3 service worker as disposable.
+* Backend: a small HTTPS resolver that holds the licensed web-search API secret and exposes
+  small, authenticated, idempotent batch requests.
+* Provider: a swappable adapter. Prefer a current licensed structured Web Search API; do not
+  scrape a search-engine HTML page or use a discontinued Bing Search API.
+* Decision engine: a pure TypeScript package with deterministic rules and retained evidence.
+* Quality: unit, integration, E2E, and Chrome/Edge manual smoke tests; CI must be secret-free.
+
+4. Security and privacy baseline
+
+The extension should have a very small permission surface. It normally needs only `storage`,
+maybe `downloads`, and a narrowly scoped resolver host. It should contain no content script,
+no LinkedIn host permission, no browsing history, no clipboard read, no remote executable
+code, and no bundled API secret.
+
+Company lists can be commercially sensitive. The implementation should disclose exactly what
+gets sent to the resolver, whether the resolver caches it, how long it retains data, and how
+the user can erase local history. Default to short retention or no server-side persistence.
+
+5. Why a backend is needed
+
+A public browser extension cannot safely keep a paid search-provider API key. Putting it in
+the extension means anyone can extract and abuse it. The backend keeps the key in its secret
+store, applies quotas and rate limits, and returns only structured candidate evidence. A
+public extension also needs proper end-user authentication or issued access tokens; a hardcoded
+shared password is not an acceptable production design.
+
+6. What not to build
+
+Do not build any of the following:
+
+* a LinkedIn scraper, crawler, login bot, profile parser, or browser content script;
+* a workaround for LinkedIn login walls, rate limits, robots, or CAPTCHA;
+* a Bing/Google result-page scraper;
+* an LLM prompt that turns a company name into a presumed LinkedIn slug;
+* a broad-permission extension that reads arbitrary pages;
+* a public repository that contains API keys, customer CSVs, generated lookup datasets, or
+  hidden provider credentials; or
+* a claim that the extension has been approved by a browser store before approval occurs.
+
+7. Browser-store readiness versus GitHub publication
+
+Pushing the source to GitHub is a normal engineering step. Publishing to Chrome Web Store or
+Microsoft Edge Add-ons is a separate owner-controlled process. It requires developer accounts,
+legal/product disclosures, assets, a privacy-policy URL, package upload, and store review.
+The coding agent should produce store-ready ZIPs and a checklist, but must wait for explicit
+owner authority before submitting them to either store.
+
+8. GitHub hand-off expectation
+
+The preferred repository is:
+  https://github.com/siddhant-pardeshi/company-linkedin-url-finder
+
+If the owner intends another repository name or wants a private repository, change that before
+asking the coding agent to push. The agent should always report an actual remote URL and commit
+SHA. A statement such as "published" is not adequate evidence on its own.
+
+================================================================================
+PART 3 — CURRENT OFFICIAL REFERENCES TO VERIFY AGAIN BEFORE BUILDING
+================================================================================
+
+Chrome Manifest V3 and extension manifests:
+  https://developer.chrome.com/docs/extensions/reference/manifest
+  https://developer.chrome.com/docs/extensions/develop/migrate
+
+Chrome Web Store publishing and policies:
+  https://developer.chrome.com/docs/webstore/publish
+  https://developer.chrome.com/docs/webstore/program-policies/policies
+
+Microsoft Edge extension compatibility and publication:
+  https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/port-chrome-extension
+  https://learn.microsoft.com/en-us/microsoft-edge/extensions/publish/publish-extension
+  https://learn.microsoft.com/en-us/microsoft-edge/extensions/developer-guide/manifest-v3
+
+Structured web-search provider example (confirm current terms/pricing/API before use):
+  https://api-dashboard.search.brave.com/app/documentation/web-search
+  https://api-dashboard.search.brave.com/documentation/guides/authentication
+
+Bing Search API retirement notice (do not use the retired API as the core provider):
+  https://learn.microsoft.com/en-us/lifecycle/announcements/bing-search-api-retirement
+
+LinkedIn rules relevant to automation/scraping—review before launch:
+  https://www.linkedin.com/legal/user-agreement
+  https://www.linkedin.com/help/linkedin/answer/a1341387/prohibited-software-and-extensions
+
+END OF FILE

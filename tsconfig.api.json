@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node"]
+  },
+  "include": [
+    "apps/api/src/**/*.ts",
+    "apps/api/test/**/*.ts",
+    "packages/matching/src/**/*.ts",
+    "packages/test-fixtures/src/**/*.ts"
+  ]
+}

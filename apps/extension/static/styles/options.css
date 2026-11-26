@@ -1,0 +1,134 @@
+/* Settings page */
+
+.page-head {
+  padding: 18px 0 6px;
+}
+
+.page-head h1 {
+  margin-bottom: 14px;
+  font-size: clamp(38px, 4.6vw, 52px);
+}
+
+.page-head + .banner {
+  margin-top: 20px;
+}
+
+.endpoint {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+#token-form .field {
+  margin: 16px 0;
+}
+
+#token-form .row,
+#defaults-form .row {
+  margin-top: 18px;
+}
+
+#defaults-form .field {
+  margin-bottom: 4px;
+}
+
+#defaults-status {
+  align-self: center;
+}
+
+#connection-state {
+  margin-top: 2px;
+}
+
+.danger-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+  padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, transparent);
+  border-radius: 12px;
+  background: var(--danger-soft);
+}
+
+.danger-zone strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--ink);
+}
+
+.danger-zone .hint {
+  color: color-mix(in srgb, var(--danger) 70%, var(--ink));
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 8px 20px;
+  margin-top: 18px;
+  font-size: 12.5px;
+}
+
+.detail-list dt {
+  color: var(--muted);
+}
+
+.detail-list dd {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--line);
+}
+
+.details > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  background: var(--surface);
+}
+
+.details dt {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.details dd {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 620px) {
+  .detail-list {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .detail-list dd {
+    margin-bottom: 8px;
+  }
+
+  .danger-zone {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

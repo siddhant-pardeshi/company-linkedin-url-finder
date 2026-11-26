@@ -1,0 +1,10 @@
+{
+  "name": "@clf/matching",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure, deterministic URL/normalization/query/matching engine. No network, no AI, no DOM.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "@clf/extension",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Company Page Finder — Manifest V3 extension for Chrome and Microsoft Edge.",
+  "scripts": {
+    "build": "node ../../tools/build-extension.mjs",
+    "build:dev": "node ../../tools/build-extension.mjs --dev"
+  }
+}
