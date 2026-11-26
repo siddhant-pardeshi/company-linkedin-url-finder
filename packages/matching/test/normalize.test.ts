@@ -100,6 +100,7 @@ describe("countryMentioned", () => {
 describe("domainMentioned", () => {
   it("requires a real host boundary", () => {
     expect(domainMentioned("microsoft.com", "Visit microsoft.com for details")).toBe(true);
+    expect(domainMentioned("microsoft.com", "Visit microsoft.com.")).toBe(true);
     expect(domainMentioned("microsoft.com", "https://www.microsoft.com/en-us")).toBe(true);
     expect(domainMentioned("microsoft.com", "notmicrosoft.com")).toBe(false);
     expect(domainMentioned("microsoft.com", "microsoft.com.evil.example")).toBe(false);

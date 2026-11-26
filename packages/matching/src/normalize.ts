@@ -366,7 +366,7 @@ export function domainMentioned(domain: string | null, haystack: string): boolea
   const escaped = domain.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const withoutWww = escaped.replace(/^www\\\./, "");
   const pattern = new RegExp(
-    `(?:^|[^a-z0-9.-])(?:www\\.)?${withoutWww}(?::\\d+)?(?:[/?#]|[^a-z0-9.-]|$)`,
+    `(?:^|[^a-z0-9.-])(?:www\\.)?${withoutWww}(?::\\d+)?(?:[/?#]|\\.(?=\\s|$)|[^a-z0-9.-]|$)`,
     "i",
   );
   return pattern.test(haystack);
