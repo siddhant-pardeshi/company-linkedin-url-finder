@@ -1,0 +1,63 @@
+﻿name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Typecheck, lint, tests, build, package validation
+    runs-on: ubuntu-latest
+    env:
+      RESOLVER_ORIGIN: https://resolver.example.com
+      CI: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Format check
+        run: npm run format:check
+
+      - name: Unit and integration tests
+        run: npm run coverage
+
+      - name: Build extension (CI placeholder origin)
+        run: npm run build
+
+      - name: Build resolver
+        run: npm run build:api
+
+      - name: Validate distribution
+        run: npm run validate:dist
+
+      - name: Package QA artifacts (unconfigured; not store-ready)
+        run: npm run package -- --allow-unconfigured
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: company-page-finder-unconfigured
+          path: |
+            dist/extension
+            dist/packages
+          if-no-files-found: error
+          retention-days: 14
