@@ -1,4 +1,4 @@
-﻿# Verification log
+# Verification log
 
 Local verification of the `Company Page Finder` build on **2026-11-26** (Windows, Node 24.20.0, npm 11.19.0, Chrome for Testing 158.0.8127.88).
 
@@ -21,9 +21,9 @@ Test files cover: URL validation/canonicalization, normalization/legal suffixes,
 
 Environment:
 
-- Chrome for Testing **158.0.8127.88** (Chrome branded builds now ignore `--load-extension`).
+- Chrome for Testing **158.0.8127.88** (branded Chrome builds now ignore `--load-extension`).
 - Unpacked build `dist/extension-dev`.
-- Local resolver on `http://127.0.0.1:8787` with `SEARCH_PROVIDER=mock`, access token provisioned through the real Settings page.
+- Local resolver on `http://127.0.0.1:8787` with `SEARCH_PROVIDER=mock`; the access token was provisioned through the real Settings page.
 - Driven over the DevTools Protocol with the real service worker, IndexedDB, alarms API, and UI.
 
 Command:
@@ -34,7 +34,7 @@ npm run build:dev
 node tools/e2e-smoke.mjs
 ```
 
-Result: **23 / 23 checks passed**, with no browser console errors:
+Result: **23 / 23 checks passed** (22 feature assertions plus the console-error guard), with no browser console errors:
 
 1. Workspace loads and renders.
 2. Missing-token guidance is visible.
@@ -59,18 +59,16 @@ Result: **23 / 23 checks passed**, with no browser console errors:
 21. Narrow viewport has no horizontal table overflow.
 22. No browser console errors.
 
-That is 22 automated checks plus the separate console-error guard, shown as 23 passes by the script.
-
 Screenshots (also copied to `docs/assets/`): `workspace-top.png`, `workspace-results.png`, `review-drawer.png`, `workspace-narrow.png`, `options.png`. They use sanitized fixtures only.
 
 ## Manual checks performed
 
 - API `GET /healthz` returned `{ok:true, provider:"mock", version:"1.0.0"}`.
 - `GET /v1/whoami` without a bearer token returned `401`; with the token, `{ok:true,...}`.
-- `POST /v1/search` via the extension executed real HTTPS-local traffic from the service worker to the resolver.
+- `POST /v1/search` via the extension executed real local HTTP traffic from the service worker to the resolver.
 - `chrome.runtime.sendMessage` round-trips for settings, jobs, rows, audit, and review actions.
 - Created, persisted, and read a job through IndexedDB in the real browser.
-- Verified icons, tabs, dialogs, focus-visible styling, and responsive layout at 1440Ã—1000 and 900Ã—900.
+- Verified icons, tabs, dialogs, focus-visible styling, and responsive layout at 1440×1000 and 900×900.
 
 ## Build artifacts
 
@@ -78,12 +76,12 @@ Built locally with the placeholder origin `https://resolver.example.com` because
 
 | Artifact                                    | Path                                                               | SHA-256                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-chrome.zip` | `cc386a01fc03d54e9a6305e89cec9a4c7daa9b7f3adb21a80344e12b87d189a9` |
-| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-edge.zip`   | `cc386a01fc03d54e9a6305e89cec9a4c7daa9b7f3adb21a80344e12b87d189a9` |
+| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-chrome.zip` | `0d2a09fc4d4383d2c560302e34aa657b94c9410faf4a576f2a2495a0204a0a30` |
+| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-edge.zip`   | `0d2a09fc4d4383d2c560302e34aa657b94c9410faf4a576f2a2495a0204a0a30` |
 
-Package size: 68.7 KiB each, 13 files, `manifest.json` at the ZIP root. Build baked commit `117506fa4db4`, build time `2026-11-26T06:32:18.888Z`.
+Package size: 68.7 KiB each, 13 files, `manifest.json` at the ZIP root. Build baked commit `99ccbb89c1e0`, build time `2026-11-26T06:34:55.736Z`.
 
-The extracted production ZIP was loaded into Chrome for Testing: the service worker started, `app:info` returned `buildEnv: production`, version `1.0.0`, commit `117506fa4db4`, endpoint `https://resolver.example.com`, the workspace rendered, and Start stayed disabled until a token is configured. No runtime errors were observed.
+The extracted production ZIP was loaded into Chrome for Testing: the service worker started, `app:info` returned `buildEnv: production`, version `1.0.0`, commit `99ccbb89c1e0`, endpoint `https://resolver.example.com`, the workspace rendered, and Start stayed disabled until a token is configured. No runtime errors were observed.
 
 Microsoft Edge is not installed on this machine, so Edge was not manually loaded. The Edge ZIP is byte-identical (same Chromium MV3 package); manual Edge verification remains an owner action.
 
@@ -91,9 +89,9 @@ These are **QA artifacts**, not store-ready packages. `npm run package` intentio
 
 ## Sync status
 
-- Local commits: `00636c5d61dc1ec00be8c9585a85f05e891b8b59` (initial build), `8c70a5d018870df44022082681ef5b1a0b228967` (verification docs), `117506fa4db4658b23a8f653148d683238f5e12d` (sentence-end domain fix), plus this verification-doc commit.
+- Local commits: `00636c5d61dc1ec00be8c9585a85f05e891b8b59` (initial build), `8c70a5d018870df44022082681ef5b1a0b228967` (verification docs), `117506fa4db4658b23a8f653148d683238f5e12d` (sentence-end domain fix), `99ccbb89c1e0b1e1cd8abe141f6e690fce0070de` (CSV formula hardening), plus this verification-doc commit.
 - Working tree: clean after the verification commit.
-- GitHub remote: **none**. `gh auth status` reported â€œYou are not logged into any GitHub hosts.â€ No push, release, or remote SHA was created or claimed.
+- GitHub remote: **none**. `gh auth status` reported “You are not logged into any GitHub hosts.” No push, release, or remote SHA was created or claimed.
 - Chrome Web Store / Edge Add-ons: **not submitted** (no developer-account access or owner authorization).
 
 ## Local context folder
