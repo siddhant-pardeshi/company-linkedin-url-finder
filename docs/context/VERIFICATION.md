@@ -78,12 +78,12 @@ Built locally with the placeholder origin `https://resolver.example.com` because
 
 | Artifact                                    | Path                                                               | SHA-256                                                            |
 | ------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
-| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-chrome.zip` | `756b5331a8aaa574ba82cebc563dba6f4dc04508cc7ee6715b47f3a0b5572877` |
-| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-edge.zip`   | `756b5331a8aaa574ba82cebc563dba6f4dc04508cc7ee6715b47f3a0b5572877` |
+| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-chrome.zip` | `cc386a01fc03d54e9a6305e89cec9a4c7daa9b7f3adb21a80344e12b87d189a9` |
+| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.0.0-UNCONFIGURED-edge.zip`   | `cc386a01fc03d54e9a6305e89cec9a4c7daa9b7f3adb21a80344e12b87d189a9` |
 
-Package size: 68.7 KiB each, 13 files, `manifest.json` at the ZIP root. Build baked commit `00636c5d61dc`, build time `2026-11-26T06:30:07.141Z`.
+Package size: 68.7 KiB each, 13 files, `manifest.json` at the ZIP root. Build baked commit `117506fa4db4`, build time `2026-11-26T06:32:18.888Z`.
 
-The extracted production ZIP was loaded into Chrome for Testing: the service worker started, `app:info` returned `buildEnv: production`, version `1.0.0`, commit `00636c5d61dc`, endpoint `https://resolver.example.com`, the workspace rendered, and Start stayed disabled until a token is configured. No runtime errors were observed.
+The extracted production ZIP was loaded into Chrome for Testing: the service worker started, `app:info` returned `buildEnv: production`, version `1.0.0`, commit `117506fa4db4`, endpoint `https://resolver.example.com`, the workspace rendered, and Start stayed disabled until a token is configured. No runtime errors were observed.
 
 Microsoft Edge is not installed on this machine, so Edge was not manually loaded. The Edge ZIP is byte-identical (same Chromium MV3 package); manual Edge verification remains an owner action.
 
@@ -91,7 +91,7 @@ These are **QA artifacts**, not store-ready packages. `npm run package` intentio
 
 ## Sync status
 
-- Local git commit: `00636c5d61dc1ec00be8c9585a85f05e891b8b59` (`feat: evidence-first company page finder for Chrome and Edge`) plus this verification-doc commit.
+- Local commits: `00636c5d61dc1ec00be8c9585a85f05e891b8b59` (initial build), `8c70a5d018870df44022082681ef5b1a0b228967` (verification docs), `117506fa4db4658b23a8f653148d683238f5e12d` (sentence-end domain fix), plus this verification-doc commit.
 - Working tree: clean after the verification commit.
 - GitHub remote: **none**. `gh auth status` reported â€œYou are not logged into any GitHub hosts.â€ No push, release, or remote SHA was created or claimed.
 - Chrome Web Store / Edge Add-ons: **not submitted** (no developer-account access or owner authorization).
