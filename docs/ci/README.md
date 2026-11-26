@@ -1,6 +1,6 @@
 # CI workflow
 
-`ci.yml.disabled` contains the complete GitHub Actions pipeline: strict TypeScript, ESLint, Prettier, the full Vitest suite with coverage, the extension and resolver builds, distribution validation, and packaging of unconfigured QA artifacts.
+`docs/ci/ci.yml.disabled` contains the complete GitHub Actions pipeline: strict TypeScript, ESLint, Prettier, the full Vitest suite with coverage, the extension and resolver builds, distribution validation, and packaging of unconfigured QA artifacts.
 
 It ships with the `.disabled` suffix because the repository was published with a GitHub CLI token that did not carry the `workflow` OAuth scope, and GitHub refuses to create files under `.github/workflows/` without it.
 
@@ -15,7 +15,8 @@ It ships with the `.disabled` suffix because the repository was published with a
 2. Rename the file back:
 
    ```bash
-   git mv .github/workflows/ci.yml.disabled .github/workflows/ci.yml
+   mkdir -p .github/workflows
+   git mv docs/ci/ci.yml.disabled .github/workflows/ci.yml
    git commit -m "ci: enable GitHub Actions pipeline"
    git push
    ```

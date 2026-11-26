@@ -715,7 +715,7 @@ Full evidence, commands, hashes, and limitations: [docs/context/VERIFICATION.md]
 ## Project status
 
 - **Source:** <https://github.com/siddhant-pardeshi/company-linkedin-url-finder>. Local verified build is **1.1.0**.
-- **CI:** the workflow ships as `.github/workflows/ci.yml.disabled` because the publishing token lacked the `workflow` scope. Rename it (or grant `gh auth refresh -h github.com -s workflow`) to activate; see [.github/workflows/README.md](.github/workflows/README.md). `npm run check` runs the same gates locally.
+- **CI:** the workflow ships as `docs/ci/ci.yml.disabled` because publishing with a GitHub CLI token without the `workflow` scope cannot create files under `.github/workflows/`. Grant `gh auth refresh -h github.com -s workflow`, then follow [docs/ci/README.md](docs/ci/README.md) to activate it. `npm run check` runs the same gates locally.
 - **Packages:** local QA ZIPs are built with the placeholder resolver origin and named `UNCONFIGURED`; they are **not** store-ready.
 - **Chrome Web Store / Edge Add-ons:** not submitted. See [docs/STORE_SUBMISSION.md](docs/STORE_SUBMISSION.md) for the owner checklist, assets, permission justifications, privacy disclosures, and reviewer test plan.
 
@@ -738,7 +738,7 @@ docs/
   STORE_SUBMISSION.md store checklist and listing copy
   context/          verified references, decisions, verification log
 tools/              build, package, dist validation, icons, browser smoke
-.github/workflows/  CI
+docs/ci/            CI workflow template (activate with the workflow scope)
 ```
 
 ---
