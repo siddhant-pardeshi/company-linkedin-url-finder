@@ -58,14 +58,14 @@ Screenshots (sanitized fixtures only): `workspace-top.png`, `workspace-results.p
 
 Built locally with the placeholder origin `https://resolver.example.com` because no production resolver was deployed and no origin was provided. Version 1.1.0.
 
-| Artifact                                    | Path                                                               | SHA-256                  |
-| ------------------------------------------- | ------------------------------------------------------------------ | ------------------------ |
-| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.1.0-UNCONFIGURED-chrome.zip` | _filled after packaging_ |
-| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.1.0-UNCONFIGURED-edge.zip`   | _filled after packaging_ |
+| Artifact                                    | Path                                                               | SHA-256                                                            |
+| ------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Chrome QA ZIP (unconfigured)                | `dist/packages/company-page-finder-v1.1.0-UNCONFIGURED-chrome.zip` | `ad19a0dd1e65d057ee108ca6d1f97bc5607979824a74e18e6586e2d99253df7e` |
+| Edge QA ZIP (unconfigured, identical bytes) | `dist/packages/company-page-finder-v1.1.0-UNCONFIGURED-edge.zip`   | `ad19a0dd1e65d057ee108ca6d1f97bc5607979824a74e18e6586e2d99253df7e` |
 
-Package size: _filled after packaging_. `manifest.json` is at the ZIP root.
+Package size: 79.8 KiB each. Build baked commit `6a7b1be3d00e`, build time `2026-11-26T07:16:16.347Z`. `manifest.json` is at the ZIP root.
 
-The extracted production ZIP was loaded into Chrome for Testing; the service worker started, `app:info` reported production/version/commit/endpoint, and the workspace rendered with Start disabled until a token is configured.
+The extracted production ZIP was loaded into Chrome for Testing; the service worker started, `app:info` reported production, version `1.1.0`, commit `6a7b1be3d00e`, endpoint `https://resolver.example.com`; the workspace rendered with both Companies and People modes and Start disabled until a token is configured.
 
 Microsoft Edge is not installed on this machine, so Edge was not manually loaded. The Edge ZIP is byte-identical (same Chromium MV3 package); manual Edge verification remains an owner action.
 
@@ -73,7 +73,7 @@ These are **QA artifacts**, not store-ready packages. `npm run package` refuses 
 
 ## Sync status
 
-- Local Git history: initial build `00636c5d61dc1ec00be8c9585a85f05e891b8b59`, verification docs `8c70a5d018870df44022082681ef5b1a0b228967`, domain fix `117506fa4db4658b23a8f653148d683238f5e12d`, CSV hardening `99ccbb89c1e0b1e1cd8abe141f6e690fce0070de`, docs clarifications `6f5b54e`, `703e803`, plus the 1.1.0 feature commit and this verification commit.
+- Local Git history: initial build `00636c5d61dc1ec00be8c9585a85f05e891b8b59`, verification docs `8c70a5d018870df44022082681ef5b1a0b228967`, domain fix `117506fa4db4658b23a8f653148d683238f5e12d`, CSV hardening `99ccbb89c1e0b1e1cd8abe141f6e690fce0070de`, docs clarifications `6f5b54e`, `703e803`, feature commit `6a7b1be3d00eea4e53ca869e6063905ea3010306`, plus this verification commit.
 - GitHub remote: **none**. `gh auth status` reported “You are not logged into any GitHub hosts.” No push, release, or remote SHA was created or claimed.
 - Chrome Web Store / Edge Add-ons: **not submitted** (no developer-account access or owner authorization).
 
