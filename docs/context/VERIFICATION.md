@@ -75,7 +75,7 @@ These are **QA artifacts**, not store-ready packages. `npm run package` refuses 
 
 - **Public repository:** <https://github.com/siddhant-pardeshi/company-linkedin-url-finder> (MIT, default branch `main`, description and six topics set).
 - **Authenticated as:** `siddhant-pardeshi` via `gh auth login` (device flow, scopes `gist`, `read:org`, `repo`).
-- **Published history:** 14 commits, ending at the commit that contains this line. The pre-publish history is retained locally at `refs/heads/backup/original-main` (`dea3b09…`).
+- **Published history:** 16 commits, ending at the commit that contains this line. The pre-publish history is retained locally at `refs/heads/backup/original-main` (`dea3b09…`), which was never pushed.
 - **Why SHAs changed:** the publishing token lacked the `workflow` OAuth scope, and GitHub refuses any push that creates files under `.github/workflows/`. The eight local commits were replayed without that one file (identical trees otherwise, messages/authors/dates preserved), and the CI definition was relocated to `docs/ci/ci.yml.disabled` with activation instructions in `docs/ci/README.md`. Nothing was discarded: the original commits remain reachable via the backup branch.
 - **CI:** inactive until someone with the `workflow` scope moves `docs/ci/ci.yml.disabled` to `.github/workflows/ci.yml`. `npm run check` runs the same gates locally.
 - **Chrome Web Store / Edge Add-ons:** **not submitted** (no developer-account access or owner authorization).
