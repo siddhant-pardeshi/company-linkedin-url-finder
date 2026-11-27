@@ -25,6 +25,7 @@
     "build:dev": "node tools/build-extension.mjs --dev",
     "package": "node tools/package-extension.mjs",
     "validate:dist": "node tools/validate-dist.mjs",
+    "verify:unpacked": "node tools/verify-unpacked.mjs",
     "e2e": "node tools/e2e-smoke.mjs",
     "api:start": "node tools/build-api.mjs && node dist/api/server.js",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run build && npm run build:api && npm run validate:dist"

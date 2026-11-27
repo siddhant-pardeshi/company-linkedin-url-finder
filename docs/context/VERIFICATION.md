@@ -19,6 +19,17 @@ New in 1.1.0 test coverage: `/in/` URL validation, person-name normalization (`L
 
 ## Real-browser smoke test
 
+### Loading the unpacked build
+
+`dist/` is a container holding `extension/`, `extension-dev/`, `api/`, and `packages/`; it has no `manifest.json` at its root. Chrome and Edge need the folder that **directly** contains the manifest:
+
+| Goal                                 | Folder to load       | Resolver baked in                        |
+| ------------------------------------ | -------------------- | ---------------------------------------- |
+| Local demo against the mock resolver | `dist\extension-dev` | `http://127.0.0.1:8787`                  |
+| Production-style build               | `dist\extension`     | `RESOLVER_ORIGIN` (placeholder if unset) |
+
+Selecting `dist` produces “Manifest file is missing or unreadable — Could not load manifest.” Run `npm run verify:unpacked` to print the exact loadable absolute path; both builds also print it at the end of `npm run build` / `npm run build:dev`. Verified on 2026-11-27: a fresh Chrome for Testing instance loaded `dist\extension-dev` and its service worker answered `app:info` with version `1.1.0`.
+
 Environment:
 
 - Chrome for Testing **158.0.8127.88** (branded Chrome builds ignore `--load-extension`).

@@ -146,10 +146,14 @@ async function main() {
         endpoint,
         commit,
         buildTime,
+        loadUnpackedFrom: outDir,
       },
       null,
       2,
     ),
+  );
+  console.log(
+    `\nLoad unpacked in chrome://extensions → "${outDir}" (the folder that contains manifest.json).`,
   );
 }
 

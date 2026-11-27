@@ -654,14 +654,15 @@ Browser smoke test: start Chrome for Testing with `--load-extension=%CD%\dist\ex
 
 Useful scripts:
 
-| Script                  | Purpose                                                                      |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| `npm run build`         | Production extension; uses `RESOLVER_ORIGIN` (placeholder warning if unset). |
-| `npm run build:dev`     | Localhost resolver build for unpacked testing.                               |
-| `npm run build:api`     | Bundle resolver to `dist/api/server.js`.                                     |
-| `npm run validate:dist` | Manifest/permission/CSP/asset validation.                                    |
-| `npm run package`       | Chrome/Edge ZIPs; refuses placeholder origin without `--allow-unconfigured`. |
-| `npm run api:start`     | Build and run the resolver with `.env`.                                      |
+| Script                    | Purpose                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `npm run build`           | Production extension; uses `RESOLVER_ORIGIN` (placeholder warning if unset). |
+| `npm run build:dev`       | Localhost resolver build for unpacked testing.                               |
+| `npm run build:api`       | Bundle resolver to `dist/api/server.js`.                                     |
+| `npm run validate:dist`   | Manifest/permission/CSP/asset validation.                                    |
+| `npm run verify:unpacked` | Preflight both build folders; prints the exact **Load unpacked** path.       |
+| `npm run package`         | Chrome/Edge ZIPs; refuses placeholder origin without `--allow-unconfigured`. |
+| `npm run api:start`       | Build and run the resolver with `.env`.                                      |
 
 ---
 
@@ -683,18 +684,19 @@ Full evidence, commands, hashes, and limitations: [docs/context/VERIFICATION.md]
 
 ## Troubleshooting
 
-| Symptom                                  | Likely cause / fix                                                                                   |
-| ---------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| Start disabled                           | No valid rows, import errors, active batch, or no resolver token.                                    |
-| 401 / “Access token rejected”            | Token does not match `RESOLVER_ACCESS_TOKENS`; update in Settings and Resume.                        |
-| “Failed to fetch” / resolver unreachable | API not running, wrong `RESOLVER_ORIGIN` baked into the build, or host-permission mismatch. Rebuild. |
-| Every row error, provider unavailable    | Provider key/quota/terms issue on the server. Check resolver logs (no names/queries).                |
-| Job paused at cooldown                   | Provider rate limit; it auto-resumes after the reported delay or use Resume now.                     |
-| AI “Permission needed”                   | Save the AI section and accept the optional provider host prompt; reload Settings if dismissed.      |
-| AI 401/429                               | Wrong key/model/plan/quota. Fix in Settings; deterministic search still works.                       |
-| AI note on batch                         | AI failed; deterministic queries ran. Check key, model, quota, and provider status.                  |
-| Export does nothing                      | `downloads` permission removed or save dialog blocked.                                               |
-| People all review                        | Name-only input or no company/title/location in evidence. Add context via Edit or CSV.               |
+| Symptom                                                        | Likely cause / fix                                                                                                                                                                                                                                       |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| “Manifest file is missing or unreadable” after choosing `dist` | `dist` is a **container** folder (`extension/`, `extension-dev/`, `api/`, `packages/`). Chrome needs the folder that directly contains `manifest.json`: `dist\extension` or `dist\extension-dev`. Run `npm run verify:unpacked` to print the exact path. |
+| Start disabled                                                 | No valid rows, import errors, active batch, or no resolver token.                                                                                                                                                                                        |
+| 401 / “Access token rejected”                                  | Token does not match `RESOLVER_ACCESS_TOKENS`; update in Settings and Resume.                                                                                                                                                                            |
+| “Failed to fetch” / resolver unreachable                       | API not running, wrong `RESOLVER_ORIGIN` baked into the build, or host-permission mismatch. Rebuild.                                                                                                                                                     |
+| Every row error, provider unavailable                          | Provider key/quota/terms issue on the server. Check resolver logs (no names/queries).                                                                                                                                                                    |
+| Job paused at cooldown                                         | Provider rate limit; it auto-resumes after the reported delay or use Resume now.                                                                                                                                                                         |
+| AI “Permission needed”                                         | Save the AI section and accept the optional provider host prompt; reload Settings if dismissed.                                                                                                                                                          |
+| AI 401/429                                                     | Wrong key/model/plan/quota. Fix in Settings; deterministic search still works.                                                                                                                                                                           |
+| AI note on batch                                               | AI failed; deterministic queries ran. Check key, model, quota, and provider status.                                                                                                                                                                      |
+| Export does nothing                                            | `downloads` permission removed or save dialog blocked.                                                                                                                                                                                                   |
+| People all review                                              | Name-only input or no company/title/location in evidence. Add context via Edit or CSV.                                                                                                                                                                   |
 
 ---
 
